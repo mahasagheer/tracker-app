@@ -1,0 +1,38 @@
+# Node modules
+node_modules/
+
+# Build output
+my-app/build/
+dist/
+win-unpacked/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Environment files
+.env
+.env.*
+
+# SQLite DBs
+*.db
+*.sqlite
+
+# Electron cache
+.cache/
+
+# VSCode
+.vscode/
+
+# Test screenshots
+/test_screenshots/
+
+# Electron packager output
+*.exe
+*.dmg
+*.app
+*.AppImage
