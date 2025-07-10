@@ -1,214 +1,130 @@
-import React from 'react';
+import React, { useState } from 'react';
 import Button from '../components/ui/Button';
+import Input from '../components/ui/Input';
+import Modal from '../components/ui/Modal';
+import Select from '../components/ui/Select';
+import { useDispatch, useSelector } from 'react-redux';
+import { signupAdmin, resetSignupState } from '../authSlice';
 
 export default function Home() {
+  const [showLogin, setShowLogin] = useState(false);
+  const [showSignup, setShowSignup] = useState(false);
+  const [loginData, setLoginData] = useState({ email: '', password: '' });
+  const [signupData, setSignupData] = useState({ name: '', email: '', password: '', timezone: '', company_domain: '', company_name: '' });
+
+  const dispatch = useDispatch();
+  const { signupLoading, signupError, signupSuccess } = useSelector(state => state.auth);
+
+  const handleLoginChange = e => setLoginData({ ...loginData, [e.target.name]: e.target.value });
+  const handleSignupChange = e => setSignupData({ ...signupData, [e.target.name]: e.target.value });
+
+  const handleSignupSubmit = e => {
+    e.preventDefault();
+    dispatch(signupAdmin(signupData));
+  };
+
+  const handleSignupClose = () => {
+    setShowSignup(false);
+    dispatch(resetSignupState());
+  };
+
   return (
-    <div className="bg-white min-h-screen w-full">
+    <div className="bg-accent min-h-screen w-full font-sans">
       {/* Header */}
-      <header className="w-full px-8 py-6 flex justify-between items-center border-b bg-white">
+      <header className="w-full px-10 py-6 flex items-center justify-between bg-white">
         <div className="flex items-center gap-2">
-          <span className="font-bold text-2xl text-blue-700 tracking-tight">PULSE TRACKER</span>
+          <span className="font-bold text-2xl text-dark tracking-tight flex items-center gap-2">
+            <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <rect width="32" height="32" rx="8" fill="#C6F36B"/>
+              <path d="M10 22L22 10M10 10H22V22" stroke="#222B20" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+            GreenVision
+          </span>
         </div>
-        <div className="flex gap-2">
-          <Button className="bg-white text-[#1d4ed8] border border-[#2563eb] hover:bg-blue-50">Sign in</Button>
-        </div>
+        <Button variant="dark" className="px-7 py-2 text-lg shadow-none" onClick={() => setShowLogin(true)}>Login</Button>
       </header>
 
+      {/* Login Modal */}
+      <Modal isOpen={showLogin} onClose={() => setShowLogin(false)}>
+        <h2 className="text-2xl font-bold text-dark mb-6 text-center">Login</h2>
+        <form className="space-y-4">
+          <Input name="email" value={loginData.email} onChange={handleLoginChange} placeholder="Email" type="email" required />
+          <Input name="password" value={loginData.password} onChange={handleLoginChange} placeholder="Password" type="password" required />
+          <Button type="submit" variant="dark" fullWidth>Login</Button>
+        </form>
+        <div className="text-center mt-4 text-sm text-dark">
+          Don't have an account?{' '}
+          <button className="text-primary font-semibold hover:underline" onClick={() => { setShowLogin(false); setShowSignup(true); }}>Sign up</button>
+        </div>
+      </Modal>
+
+      {/* Signup Modal */}
+      <Modal isOpen={showSignup} onClose={handleSignupClose}>
+        <h2 className="text-2xl font-bold text-dark mb-6 text-center">Sign Up</h2>
+        <form className="space-y-4" onSubmit={handleSignupSubmit}>
+          <Input name="name" value={signupData.name} onChange={handleSignupChange} placeholder="Name" required />
+          <Input name="email" value={signupData.email} onChange={handleSignupChange} placeholder="Email" type="email" required />
+          <Input name="password" value={signupData.password} onChange={handleSignupChange} placeholder="Password" type="password" required />
+          <Select name="timezone" value={signupData.timezone} onChange={handleSignupChange} required>
+            <option value="">Select your time zone</option>
+            <option value="UTC">UTC</option>
+            <option value="America/New_York">America/New_York (EST)</option>
+            <option value="America/Chicago">America/Chicago (CST)</option>
+            <option value="America/Denver">America/Denver (MST)</option>
+            <option value="America/Los_Angeles">America/Los_Angeles (PST)</option>
+            <option value="Europe/London">Europe/London (GMT)</option>
+            <option value="Europe/Berlin">Europe/Berlin (CET)</option>
+            <option value="Asia/Kolkata">Asia/Kolkata (IST)</option>
+            <option value="Asia/Tokyo">Asia/Tokyo (JST)</option>
+            <option value="Australia/Sydney">Australia/Sydney (AEST)</option>
+          </Select>
+          <Input name="company_domain" value={signupData.company_domain} onChange={handleSignupChange} placeholder="Company domain (e.g. example.com)" required />
+          <Input name="company_name" value={signupData.company_name} onChange={handleSignupChange} placeholder="Company name" required />
+          <Button type="submit" variant="primary" fullWidth disabled={signupLoading}>{signupLoading ? 'Signing up...' : 'Sign Up'}</Button>
+          {signupError && <div className="text-center text-red-500 text-sm mt-2">{signupError}</div>}
+          {signupSuccess && <div className="text-center text-green-600 text-sm mt-2">Signup successful! You can now log in.</div>}
+        </form>
+        <div className="text-center mt-4 text-sm text-dark">
+          Already have an account?{' '}
+          <button className="text-primary font-semibold hover:underline" onClick={() => { handleSignupClose(); setShowLogin(true); }}>Login</button>
+        </div>
+      </Modal>
+
       {/* Hero Section */}
-      <section className="w-full flex flex-col md:flex-row items-center justify-between px-[15%] py-[10%] bg-white">
-        <div className="flex-1 max-w-xl">
-         
-          <h1 className="text-4xl md:text-5xl font-extrabold text-gray-900 mb-4 leading-tight">Time Tracking and Screenshot Monitoring Software</h1>
-          <p className="text-lg text-gray-600 mb-4">Starting at just <span className="text-blue-700 font-bold">$2.99 per user/month</span> when billed annually.<br/>Try it for free. No credit card required.</p>
-          <div className="flex gap-4 mb-6">
-            <Button>Get started</Button>
-          </div>
+      <section className="w-full flex flex-col items-center justify-center px-[8%] py-[5%] bg-white">
+        <h1 className="text-5xl md:text-[7rem] font-sans font-semibold text-textblack mb-6 leading-[6rem] w-full text-center">Managerial optimization<br/>for your company</h1>
+        <p className="text-lg text-dark mb-8 max-w-2xl w-full text-center mx-auto">Choose efficiency or flexibility for your organisation, reconstruction of your team will lead to improved productivity, collaboration and higher business results.</p>
+        <div className="flex flex-col sm:flex-row gap-4 mb-8 w-full justify-center items-center">
+          <Button variant="primary" fullWidth={false} className="px-8 py-3 text-lg font-bold">Get Started</Button>
+          <Button variant="secondary" fullWidth={false} className="px-8 py-3 text-lg font-bold">Try demo</Button>
         </div>
-        <div className="flex-1 flex justify-center mt-10 md:mt-0">
-          <img src="https://placehold.co/500x300/blue/white?text=App+Screenshot" alt="App Screenshot" className="rounded-xl shadow-lg border border-blue-100" />
+        <div className="w-full flex justify-center">
+          <img src="https://images.unsplash.com/photo-1519125323398-675f0ddb6308?auto=format&fit=facearea&w=1200&q=80" alt="Manager working" className="rounded-2xl shadow-lg border-4 border-light w-full max-w-3xl object-cover" />
         </div>
       </section>
 
-      {/* Analytics Section */}
-      <section className="w-full px-8 py-16 bg-white">
-        <div className="text-center mb-8">
-          <span className="text-blue-700 font-semibold text-sm uppercase tracking-widest">Workforce Productivity Analytics Software</span>
-          <h2 className="text-3xl font-bold text-gray-900 mt-2 mb-2">AI-Powered Time Tracking and Productivity Analytics</h2>
-          <p className="text-gray-600">An experience crafted with users in mind</p>
+      {/* Stats/Features Section */}
+      <section className="w-full flex flex-col md:flex-row gap-6 justify-center items-stretch px-[8%] py-12 bg-accent">
+        {/* Mission Card */}
+        <div className="flex-1 bg-primary rounded-2xl p-8 flex flex-col justify-between shadow-md min-w-[220px] mb-4 md:mb-0">
+          <div className="text-dark text-lg font-semibold mb-2">Our mission is make your team efficient and flexible to achieve great results</div>
         </div>
-        <div className="flex justify-center mb-8">
-          <img src="https://placehold.co/900x350/gray/white?text=Dashboard+Screenshot" alt="Dashboard Screenshot" className="rounded-xl shadow border border-gray-200" />
+        {/* 350% Stat Card */}
+        <div className="flex-1 bg-white rounded-2xl p-8 flex flex-col items-center justify-center shadow-md min-w-[180px] mb-4 md:mb-0">
+          <div className="text-4xl font-bold text-dark mb-2">350%</div>
+          <div className="text-dark text-base">Average annual growth rate among our clients</div>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-5xl mx-auto mt-8">
-          <div className="flex items-start gap-3">
-            <span className="mt-1 text-blue-600">●</span>
-            <div>
-              <span className="font-semibold text-gray-900">Work time tracking.</span>
-              <span className="text-gray-600 ml-1">Track work hours with real-time monitoring and detailed reports.</span>
-            </div>
-          </div>
-          <div className="flex items-start gap-3">
-            <span className="mt-1 text-blue-600">●</span>
-            <div>
-              <span className="font-semibold text-gray-900">Internet and app usage.</span>
-              <span className="text-gray-600 ml-1">Monitor time spent on apps and websites with detailed insights.</span>
-            </div>
-          </div>
-          <div className="flex items-start gap-3">
-            <span className="mt-1 text-blue-600">●</span>
-            <div>
-              <span className="font-semibold text-gray-900">Screenshot monitoring.</span>
-              <span className="text-gray-600 ml-1">Capture periodic screenshots for transparency and productivity.</span>
-            </div>
-          </div>
-          <div className="flex items-start gap-3">
-            <span className="mt-1 text-blue-600">●</span>
-            <div>
-              <span className="font-semibold text-gray-900">Attendance tracking.</span>
-              <span className="text-gray-600 ml-1">Monitor presence, absences, breaks, and time off in real-time.</span>
-            </div>
-          </div>
-          <div className="flex items-start gap-3">
-            <span className="mt-1 text-blue-600">●</span>
-            <div>
-              <span className="font-semibold text-gray-900">Offline mode.</span>
-              <span className="text-gray-600 ml-1">Track time without internet, syncing automatically when online.</span>
-            </div>
-          </div>
-          <div className="flex items-start gap-3">
-            <span className="mt-1 text-blue-600">●</span>
-            <div>
-              <span className="font-semibold text-gray-900">Unusual activity detection.</span>
-              <span className="text-gray-600 ml-1">Detect irregular work patterns and receive productivity alerts.</span>
-            </div>
-          </div>
+        {/* Show the results Card */}
+        <div className="flex-1 bg-white rounded-2xl p-8 flex flex-col items-center justify-center shadow-md min-w-[180px] mb-4 md:mb-0">
+          <img src="https://images.unsplash.com/photo-1521737852567-6949f3f9f2b5?auto=format&fit=facearea&w=200&q=80" alt="Team" className="rounded-xl w-24 h-24 object-cover mb-2" />
+          <div className="text-dark text-base">Show the results</div>
+        </div>
+        {/* 95% Stat Card */}
+        <div className="flex-1 bg-primary rounded-2xl p-8 flex flex-col items-center justify-center shadow-md min-w-[180px]">
+          <div className="text-4xl font-bold text-dark mb-2">95%</div>
+          <div className="text-dark text-base">ROAS has increased to prior funding</div>
         </div>
       </section>
-
-      {/* Metrics Section */}
-      <section className="w-full px-[15%] py-[10%] bg-white">
-        <h2 className="text-2xl font-bold text-gray-900 mb-8">Your Work, Your Metrics</h2>
-        <p className="text-gray-600 text-center max-w-2xl mx-auto mb-8">Unlock powerful insights with detailed reports on work patterns, productivity, and efficiency. Understand employee behavior, streamline workflows, and make data-driven decisions to boost success.</p>
-        <div className="flex flex-col md:flex-row gap-8 justify-center items-start">
-          <div className="flex-1">
-            <div className="flex gap-4 mb-2">
-              <span className="text-blue-700 font-semibold cursor-pointer border-b-2 border-blue-700">Overview</span>
-              <span className="text-gray-500 cursor-pointer">Screenshots</span>
-              <span className="text-gray-500 cursor-pointer">Attendance</span>
-              <span className="text-gray-500 cursor-pointer">Web and app usage</span>
-              <span className="text-gray-500 cursor-pointer">Productivity</span>
-            </div>
-            <div className="bg-white rounded-xl shadow border border-gray-200 p-4 mt-2">
-              <img src="https://placehold.co/700x200/gray/white?text=Team+Overview" alt="Team Overview" className="rounded" />
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Download Section */}
-      <section className="w-full bg-[#f5f7fa] py-16 px-4">
-        <div className="max-w-6xl mx-auto">
-          <h2 className="text-2xl font-bold text-center text-gray-900 mb-2">Download Pulse Tracker for your operational system</h2>
-          <p className="text-center text-gray-400 mb-10">(don't forget to <a href="#" className="text-blue-500 underline">register</a> first)</p>
-          <div className="flex flex-col md:flex-row gap-8 justify-center items-center">
-            {/* Windows Card */}
-            <div className="bg-white rounded-xl shadow p-8 flex flex-col items-center w-80">
-              <img src="https://upload.wikimedia.org/wikipedia/commons/4/48/Windows_logo_-_2012.svg" alt="Windows" className="w-16 h-16 mb-4" />
-              <div className="font-semibold text-lg text-gray-800 mb-2">Windows Agent 3.4.4</div>
-              {/* 
-                The Button component does not support the "as" prop by default, 
-                so it always renders a <button> element, not an <a> tag.
-                As a result, the "href" prop is ignored and clicking the button does not trigger a download.
-                To fix this, use a real <a> tag styled like a button, or update the Button component to support "as".
-              */}
-              <a
-                href="https://github.com/mahasagheer/employee-time-tracker/releases/download/v1.0.0/ElectronApp.exe"
-                className="px-4 py-2 rounded bg-[#3ec6fa] hover:bg-[#1daae2] w-full text-white font-semibold transition focus:outline-none focus:ring-2 focus:ring-blue-400 text-center block"
-                download
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                Download
-              </a>
-            </div>
-            {/* Mac Card */}
-            <div className="bg-white rounded-xl shadow p-8 flex flex-col items-center w-80">
-              <img src="https://upload.wikimedia.org/wikipedia/commons/a/ab/Apple-logo.png" alt="Mac" className="w-16 h-16 mb-4" />
-              <div className="font-semibold text-lg text-gray-800 mb-2">Mac OS Agent 3.4.4</div>
-              <Button className="bg-[#3ec6fa] hover:bg-[#1daae2] w-full">Download</Button>
-            </div>
-            {/* Linux Card */}
-            <div className="bg-white rounded-xl shadow p-8 flex flex-col items-center w-80">
-              <img src="https://upload.wikimedia.org/wikipedia/commons/3/35/Tux.svg" alt="Linux" className="w-16 h-16 mb-4" />
-              <div className="font-semibold text-lg text-gray-800 mb-2">Linux Agent 3.4.4</div>
-              <Button className="bg-[#3ec6fa] hover:bg-[#1daae2] w-full">Download</Button>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Call to Action Section */}
-      <section className="w-full px-[15%] py-[10%] bg-[#0a1128] flex flex-col md:flex-row items-center justify-between gap-8">
-        <div className="flex-1 max-w-xl text-white">
-          <h2 className="text-4xl font-bold mb-4">Let's get you started</h2>
-          <p className="text-lg mb-6 text-gray-200">Start tracking time, monitoring productivity, and generating insights in just minutes. WorkComposer is designed for ease, speed, and real results.</p>
-          <ul className="mb-8 space-y-2">
-            <li>✓ Automatic and manual time tracking</li>
-            <li>✓ Real-time productivity reports</li>
-            <li>✓ Web and app usage monitoring</li>
-            <li>✓ Screenshots and attendance tracking</li>
-            <li>✓ Easy team onboarding</li>
-          </ul>
-         
-          <div className="text-gray-400 text-sm mt-2">No credit card required. Setup takes less than a minute.</div>
-        </div>
-        <div className="flex-1 flex justify-center">
-          <img src="https://placehold.co/500x300/blue/white?text=App+Screenshot" alt="App Screenshot" className="rounded-xl shadow-lg border border-blue-100" />
-        </div>
-      </section>
-
-      {/* Footer */}
-      <footer className="w-full px-8 py-12 bg-[#0a1128] text-white mt-auto">
-        <div className="flex flex-col md:flex-row justify-between items-start gap-12 max-w-7xl mx-auto">
-          <div className="flex-1 mb-8 md:mb-0">
-            <div className="font-extrabold text-2xl text-blue-400 mb-2">PULSE TRACKER</div>
-            <div className="text-gray-300 mb-2">Made in America us</div>
-            <div className="text-gray-400 text-sm mb-4">© 2025 WorkComposer, Inc.</div>
-            <div className="flex gap-4 mt-2">
-              <a href="#" className="text-gray-400 hover:text-white"><i className="fab fa-youtube"></i></a>
-              <a href="#" className="text-gray-400 hover:text-white"><i className="fab fa-facebook"></i></a>
-            </div>
-          </div>
-          <div className="flex-1 grid grid-cols-2 md:grid-cols-4 gap-8">
-            <div>
-              <div className="font-semibold mb-2">Product</div>
-              <ul className="space-y-1 text-gray-300 text-sm">
-                <li><a href="#" className="hover:text-white">How it works</a></li>
-                <li><a href="#" className="hover:text-white">Pricing</a></li>
-                <li><a href="#" className="hover:text-white">Download</a></li>
-              </ul>
-            </div>
-           
-            <div>
-              <div className="font-semibold mb-2">Company</div>
-              <ul className="space-y-1 text-gray-300 text-sm">
-                <li><a href="#" className="hover:text-white">About</a></li>
-                <li><a href="#" className="hover:text-white">Contact</a></li>
-              </ul>
-            </div>
-            <div>
-              <div className="font-semibold mb-2">Legal</div>
-              <ul className="space-y-1 text-gray-300 text-sm">
-                <li><a href="#" className="hover:text-white">Terms of service</a></li>
-                <li><a href="#" className="hover:text-white">Privacy policy</a></li>
-              </ul>
-            </div>
-          </div>
-        </div>
-        <div className="border-t border-gray-800 mt-8 pt-4 flex justify-center text-gray-500 text-sm">
-          <span>&copy; 2025 WorkComposer, Inc. All rights reserved.</span>
-        </div>
-      </footer>
     </div>
   );
 } 
