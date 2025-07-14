@@ -2,64 +2,87 @@ const pool = require('./db');
 
 async function migrate() {
   try {
-    // Enable uuid-ossp extension for UUID generation (optional, uncomment if you want auto-generated UUIDs)
-    // await pool.query('CREATE EXTENSION IF NOT EXISTS "uuid-ossp";');
-
     // Enable pgcrypto extension for UUID generation
     await pool.query('CREATE EXTENSION IF NOT EXISTS "pgcrypto";');
 
-    // Companies
+    // Drop and recreate companies table to ensure proper UUID generation
+    await pool.query('DROP TABLE IF EXISTS companies CASCADE;');
+    
+    // Companies - Recreate with proper UUID generation
     await pool.query(`
-      CREATE TABLE IF NOT EXISTS companies (
-        id UUID PRIMARY KEY,
+      CREATE TABLE companies (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         name VARCHAR NOT NULL,
         domain VARCHAR UNIQUE NOT NULL,
         created_at TIMESTAMP DEFAULT now()
       );
     `);
 
-    // Employees
+    // Drop and recreate admins table to ensure proper foreign key relationship
+    await pool.query('DROP TABLE IF EXISTS admins CASCADE;');
+    
+    // Admins - Updated to include company_id foreign key
     await pool.query(`
-      CREATE TABLE IF NOT EXISTS employees (
-        id UUID PRIMARY KEY,
-        name VARCHAR,
-        email VARCHAR UNIQUE,
-        password VARCHAR,
-        company_id UUID REFERENCES companies(id),
-        assigned_email VARCHAR,
-        device_id VARCHAR UNIQUE NOT NULL,
-        is_active BOOLEAN DEFAULT true,
-        created_at TIMESTAMP DEFAULT now()
-      );
-    `);
-
-    // Admins
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS admins (
+      CREATE TABLE admins (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         name VARCHAR,
         email VARCHAR UNIQUE NOT NULL,
         password VARCHAR NOT NULL,
         timezone VARCHAR,
-        company_domain VARCHAR,
-        company_name VARCHAR,
+        company_id UUID REFERENCES companies(id),
         created_at TIMESTAMP DEFAULT now()
       );
     `);
-    // Ensure new columns exist if table was created before
+
+    // Drop and recreate projects table
+    await pool.query('DROP TABLE IF EXISTS projects CASCADE;');
     await pool.query(`
-      ALTER TABLE admins
-        ADD COLUMN IF NOT EXISTS timezone VARCHAR,
-        ADD COLUMN IF NOT EXISTS company_domain VARCHAR,
-        ADD COLUMN IF NOT EXISTS company_name VARCHAR;
+      CREATE TABLE projects (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        name TEXT NOT NULL,
+        status TEXT NOT NULL,
+        completion_rate INTEGER NOT NULL,
+        daily_work_limit INTEGER NOT NULL DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        admin_id UUID NOT NULL REFERENCES admins(id),
+        company_id UUID NOT NULL REFERENCES companies(id)
+      );
     `);
-    // Ensure id column has default for UUID generation
-    await pool.query('ALTER TABLE admins ALTER COLUMN id SET DEFAULT gen_random_uuid();');
+
+    // Drop and recreate project_members table
+    await pool.query('DROP TABLE IF EXISTS project_members CASCADE;');
+    await pool.query(`
+      CREATE TABLE project_members (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        employee_id UUID NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+        assigned_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE (project_id, employee_id)
+      );
+    `);
+
+    // Drop and recreate employees table
+    await pool.query('DROP TABLE IF EXISTS employees CASCADE;');
+    
+    // Employees
+    await pool.query(`
+      CREATE TABLE employees (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        name VARCHAR,
+        email VARCHAR UNIQUE,
+        password VARCHAR,
+        company_id UUID REFERENCES companies(id),
+        assigned_email VARCHAR,
+        role VARCHAR,
+        is_active BOOLEAN DEFAULT true,
+        created_at TIMESTAMP DEFAULT now()
+      );
+    `);
 
     // Sessions
     await pool.query(`
       CREATE TABLE IF NOT EXISTS sessions (
-        id UUID PRIMARY KEY,
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         employee_id UUID REFERENCES employees(id),
         start_time TIMESTAMP,
         end_time TIMESTAMP,
@@ -72,7 +95,7 @@ async function migrate() {
     // Screenshots
     await pool.query(`
       CREATE TABLE IF NOT EXISTS screenshots (
-        id UUID PRIMARY KEY,
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         session_id UUID REFERENCES sessions(id),
         employee_id UUID REFERENCES employees(id),
         image_path TEXT,
@@ -84,7 +107,7 @@ async function migrate() {
     // ActivityLogs
     await pool.query(`
       CREATE TABLE IF NOT EXISTS activitylogs (
-        id UUID PRIMARY KEY,
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         session_id UUID REFERENCES sessions(id),
         employee_id UUID REFERENCES employees(id),
         click_count INT,
@@ -97,7 +120,7 @@ async function migrate() {
     // Settings
     await pool.query(`
       CREATE TABLE IF NOT EXISTS settings (
-        id UUID PRIMARY KEY,
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         employee_id UUID REFERENCES employees(id),
         screenshot_interval_minutes INT,
         track_mouse BOOLEAN,

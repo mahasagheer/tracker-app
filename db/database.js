@@ -23,7 +23,7 @@ CREATE TABLE IF NOT EXISTS Employees (
   password TEXT,
   company_id TEXT,
   assigned_email TEXT,
-  device_id TEXT UNIQUE NOT NULL,
+  role TEXT,
   is_active BOOLEAN DEFAULT 1,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (company_id) REFERENCES Companies(id)

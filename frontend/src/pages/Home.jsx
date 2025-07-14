@@ -4,7 +4,9 @@ import Input from '../components/ui/Input';
 import Modal from '../components/ui/Modal';
 import Select from '../components/ui/Select';
 import { useDispatch, useSelector } from 'react-redux';
-import { signupAdmin, resetSignupState } from '../authSlice';
+import { signupAdmin, resetSignupState } from '../auth/authSlice';
+import { useAuthContext } from '../auth/AuthContext';
+import { useNavigate } from 'react-router-dom';
 
 export default function Home() {
   const [showLogin, setShowLogin] = useState(false);
@@ -14,6 +16,8 @@ export default function Home() {
 
   const dispatch = useDispatch();
   const { signupLoading, signupError, signupSuccess } = useSelector(state => state.auth);
+  const { user, userType, loading: authLoading, error: authError, login, logout } = useAuthContext();
+  const navigate = useNavigate();
 
   const handleLoginChange = e => setLoginData({ ...loginData, [e.target.name]: e.target.value });
   const handleSignupChange = e => setSignupData({ ...signupData, [e.target.name]: e.target.value });
@@ -26,6 +30,20 @@ export default function Home() {
   const handleSignupClose = () => {
     setShowSignup(false);
     dispatch(resetSignupState());
+  };
+
+  const handleLoginSubmit = async (e) => {
+    e.preventDefault();
+    const result = await login(loginData.email, loginData.password);
+    if (result && result.user) {
+      setShowLogin(false);
+      setLoginData({ email: '', password: '' });
+      if (result.user.role === 'Admin') {
+        navigate('/dashboard');
+      } else if (result.user.role === 'Time Reporter') {
+        navigate('/summary');
+      }
+    }
   };
 
   return (
@@ -41,16 +59,24 @@ export default function Home() {
             GreenVision
           </span>
         </div>
-        <Button variant="dark" className="px-7 py-2 text-lg shadow-none" onClick={() => setShowLogin(true)}>Login</Button>
+        {user ? (
+          <div className="flex items-center gap-4">
+            <span className="text-dark font-semibold">{user.name}</span>
+            <Button variant="dark" className="px-5 py-2 text-base" onClick={logout}>Logout</Button>
+        </div>
+        ) : (
+          <Button variant="dark" className="px-7 py-2 text-lg shadow-none" onClick={() => setShowLogin(true)}>Login</Button>
+        )}
       </header>
 
       {/* Login Modal */}
       <Modal isOpen={showLogin} onClose={() => setShowLogin(false)}>
         <h2 className="text-2xl font-bold text-dark mb-6 text-center">Login</h2>
-        <form className="space-y-4">
+        <form className="space-y-4" onSubmit={handleLoginSubmit}>
           <Input name="email" value={loginData.email} onChange={handleLoginChange} placeholder="Email" type="email" required />
           <Input name="password" value={loginData.password} onChange={handleLoginChange} placeholder="Password" type="password" required />
-          <Button type="submit" variant="dark" fullWidth>Login</Button>
+          <Button type="submit" variant="dark" fullWidth disabled={authLoading}>{authLoading ? 'Logging in...' : 'Login'}</Button>
+          {authError && <div className="text-center text-red-500 text-sm mt-2">{authError}</div>}
         </form>
         <div className="text-center mt-4 text-sm text-dark">
           Don't have an account?{' '}
