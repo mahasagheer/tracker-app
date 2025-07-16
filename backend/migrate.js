@@ -14,7 +14,9 @@ async function migrate() {
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         name VARCHAR NOT NULL,
         domain VARCHAR UNIQUE NOT NULL,
-        created_at TIMESTAMP DEFAULT now()
+        created_at TIMESTAMP DEFAULT now(),
+        last_modified TIMESTAMP DEFAULT now(),
+        deleted_at TIMESTAMP
       );
     `);
 
@@ -88,7 +90,9 @@ async function migrate() {
         end_time TIMESTAMP,
         total_duration_minutes INT,
         is_synced BOOLEAN DEFAULT false,
-        created_at TIMESTAMP DEFAULT now()
+        created_at TIMESTAMP DEFAULT now(),
+        last_modified TIMESTAMP DEFAULT now(),
+        deleted_at TIMESTAMP
       );
     `);
 
@@ -100,7 +104,9 @@ async function migrate() {
         employee_id UUID REFERENCES employees(id),
         image_path TEXT,
         captured_at TIMESTAMP,
-        is_synced BOOLEAN DEFAULT false
+        is_synced BOOLEAN DEFAULT false,
+        last_modified TIMESTAMP DEFAULT now(),
+        deleted_at TIMESTAMP
       );
     `);
 
@@ -113,7 +119,9 @@ async function migrate() {
         click_count INT,
         key_count INT,
         timestamp TIMESTAMP,
-        is_synced BOOLEAN DEFAULT false
+        is_synced BOOLEAN DEFAULT false,
+        last_modified TIMESTAMP DEFAULT now(),
+        deleted_at TIMESTAMP
       );
     `);
 
@@ -127,6 +135,27 @@ async function migrate() {
         track_keyboard BOOLEAN
       );
     `);
+
+    // Ensure last_modified and deleted_at columns exist for sync (safe for existing data)
+    await pool.query(`ALTER TABLE sessions ADD COLUMN IF NOT EXISTS last_modified TIMESTAMP DEFAULT now();`);
+    await pool.query(`ALTER TABLE sessions ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP;`);
+    await pool.query(`ALTER TABLE screenshots ADD COLUMN IF NOT EXISTS last_modified TIMESTAMP DEFAULT now();`);
+    await pool.query(`ALTER TABLE screenshots ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP;`);
+    await pool.query(`ALTER TABLE activitylogs ADD COLUMN IF NOT EXISTS last_modified TIMESTAMP DEFAULT now();`);
+    await pool.query(`ALTER TABLE activitylogs ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP;`);
+
+    // Ensure last_modified and deleted_at columns exist for companies (safe for existing data)
+    // These lines are now moved up
+
+    // Ensure last_modified and deleted_at columns exist for employees (safe for existing data)
+    await pool.query(`ALTER TABLE employees ADD COLUMN IF NOT EXISTS last_modified TIMESTAMP DEFAULT now();`);
+    await pool.query(`ALTER TABLE employees ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP;`);
+
+    // Ensure all employees have a valid last_modified for sync
+    await pool.query(`UPDATE employees SET last_modified = NOW() WHERE last_modified IS NULL OR last_modified < '1970-01-01';`);
+
+    // Ensure all companies have a valid last_modified for sync
+    await pool.query(`UPDATE companies SET last_modified = NOW() WHERE last_modified IS NULL OR last_modified < '1970-01-01';`);
 
     console.log('Migration complete!');
     process.exit(0);

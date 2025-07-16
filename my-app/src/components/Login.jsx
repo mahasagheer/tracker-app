@@ -1,10 +1,43 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 
 export default function Login({ onLogin }) {
   const [domain, setDomain] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [remember, setRemember] = useState(false);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    // Open dev tools for debugging
+    if (window && window.require) {
+      try {
+        const { remote } = window.require('electron');
+        remote.getCurrentWindow().webContents.openDevTools();
+      } catch (e) {
+        // Ignore if not available
+      }
+    }
+  }, []);
+
+  const handleLogin = async (e) => {
+    e.preventDefault();
+    setError('');
+    console.log('Attempting login with:', { email, password });
+    try {
+      if (window.electron && window.electron.loginEmployee) {
+        const result = await window.electron.loginEmployee(email, password);
+        if (result.success) {
+          onLogin(result.user);
+        } else {
+          setError(result.message || 'Login failed');
+        }
+      } else {
+        setError('Electron API not available');
+      }
+    } catch (err) {
+      setError('Login error');
+    }
+  };
 
   return (
     <div className="w-screen h-screen bg-gray-100 m-0 p-0">
@@ -26,7 +59,7 @@ export default function Login({ onLogin }) {
       {/* Form */}
       <div className="w-full max-w-xl mx-auto px-8 pt-10">
         <div className="font-semibold text-gray-800 mb-4 text-lg">PulseTrack authorization</div>
-        <form onSubmit={e => { e.preventDefault(); onLogin(); }}>
+        <form onSubmit={handleLogin}>
           <div className="mb-4 flex items-center">
             <label className="w-24 text-sm text-gray-700">Domain</label>
             <input type="text" value={domain} onChange={e => setDomain(e.target.value)} className="border border-gray-300 bg-white text-gray-900 rounded px-2 py-1 w-32 mr-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
@@ -46,6 +79,7 @@ export default function Login({ onLogin }) {
             <span className="flex-1" />
             <a href="#" className="text-xs text-blue-600 hover:underline">Registration</a>
           </div>
+          {error && <div className="text-red-600 text-sm mb-2">{error}</div>}
           <div className="flex justify-between mt-6">
             <button type="submit" className="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-6 py-2 rounded shadow">Login</button>
             <button type="button" className="bg-gray-200 hover:bg-gray-300 text-gray-700 font-semibold px-6 py-2 rounded">Cancel</button>

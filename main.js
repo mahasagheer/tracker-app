@@ -2,10 +2,57 @@ const { app, BrowserWindow, ipcMain, desktopCapturer, screen, powerMonitor } = r
 const url = require('url');
 const path = require('path');
 const fs = require("fs");
-const db = require('./db/database');
 const { v4: uuidv4 } = require('uuid');
 const { GlobalKeyboardListener } = require('node-global-key-listener');
 const { uIOhook, UiohookKey, UiohookMouse } = require('uiohook-napi');
+const { upsert, getUnsynced, db } = require('./db/database');
+const axios = require('axios');
+const bcrypt = require('bcryptjs');
+
+// Store last sync timestamps in memory (for demo; use persistent storage in production)
+let lastSync = {
+  employees: '1970-01-01T00:00:00Z', // Force full initial sync for employees
+  sessions: '2024-01-01T00:00:00Z',
+  screenshots: '2024-01-01T00:00:00Z',
+  activitylogs: '2024-01-01T00:00:00Z',
+};
+
+// Add robust error handling to syncTable
+async function syncTable(table, employee_id) {
+  try {
+    // 1. Upload local changes
+    const unsynced = getUnsynced(table, lastSync[table]);
+    if (unsynced.length) {
+      await axios.post('http://localhost:5000/api/sync/upload', { table, changes: unsynced });
+      console.log(`[SYNC] Uploaded ${unsynced.length} changes to ${table}`);
+    }
+    // 2. Download server changes
+    const { data } = await axios.get('http://localhost:5000/api/sync/download', {
+      params: { table, since: lastSync[table], employee_id }
+    });
+    for (const row of data.changes) {
+      try {
+        upsert(table, row);
+      } catch (e) {
+        console.error('Failed to upsert row:', row, e);
+        // Don't throw here, just log
+      }
+    }
+    console.log(`[SYNC] Downloaded ${data.changes.length} changes from ${table}`);
+    // 3. Update lastSync
+    lastSync[table] = new Date().toISOString();
+  } catch (error) {
+    // Log full error details
+    console.error(`[SYNC ERROR] Table: ${table}`, error?.response?.data || error.message || error);
+  }
+}
+
+ipcMain.handle('sync:now', async (event, employee_id) => {
+  await syncTable('sessions', employee_id);
+  await syncTable('screenshots', employee_id);
+  await syncTable('activitylogs', employee_id);
+  return { status: 'ok' };
+});
 
 let guideWindow, timerWindow, inactivityWindow;
 let timerState = 'paused'; // 'working' or 'paused'
@@ -13,6 +60,8 @@ let keyCount = 0;
 let mouseActivityCount = 0;
 let maxMouseEvents = 1000; // Fixed max for mouse percentage calculation
 let maxKeyEvents = 1000; // Fixed max for keyboard percentage calculation
+let currentEmployee = null; // { id, name, email, role }
+let currentSessionId = null;
 const gkl = new GlobalKeyboardListener();
 gkl.addListener(function (e, down) {
   if (down && e.state === 'DOWN') {
@@ -140,11 +189,49 @@ function getRandomMinutes() {
   return Array.from(minutes).sort((a, b) => a - b);
 }
 
+// Helper to create a new session in the database
+function startNewSession(employeeId) {
+  const sessionId = uuidv4();
+  const startTime = new Date().toISOString();
+  upsert('Sessions', {
+    id: sessionId,
+    employee_id: employeeId,
+    start_time: startTime,
+    is_synced: 0,
+    created_at: startTime,
+    last_modified: startTime,
+    deleted_at: null,
+  });
+  return sessionId;
+}
+
+// Helper to end the current session in the database
+function endCurrentSession() {
+  if (!currentSessionId) return;
+  const endTime = new Date().toISOString();
+  // Fetch the session to calculate duration
+  const session = db.prepare('SELECT * FROM Sessions WHERE id = ?').get(currentSessionId);
+  let totalDuration = null;
+  if (session && session.start_time) {
+    const start = new Date(session.start_time);
+    const end = new Date(endTime);
+    totalDuration = Math.round((end - start) / 60000); // minutes
+  }
+  upsert('Sessions', {
+    id: currentSessionId,
+    employee_id: currentEmployee?.id,
+    end_time: endTime,
+    total_duration_minutes: totalDuration,
+    last_modified: endTime,
+  });
+  currentSessionId = null;
+}
+
 // Capture screenshot and save to test_screenshots folder
 async function captureAndSaveScreenshot(hour, minute) {
   console.log('captureAndSaveScreenshot called. Current timerState:', timerState);
-  if (timerState !== 'working') {
-    console.log('Timer is paused, skipping screenshot.');
+  if (timerState !== 'working' || !currentEmployee || !currentSessionId) {
+    console.log('Timer is paused or no session/employee, skipping screenshot.');
     return;
   }
   // Get the primary display's size
@@ -163,7 +250,32 @@ async function captureAndSaveScreenshot(hour, minute) {
   if (!fs.existsSync(folderPath)) fs.mkdirSync(folderPath, { recursive: true });
 
   const fileName = `screenshot_${hour}-${minute.toString().padStart(2, '0')}.png`;
-  fs.writeFileSync(path.join(folderPath, fileName), image);
+  const imagePath = path.join(folderPath, fileName);
+  fs.writeFileSync(imagePath, image);
+  const capturedAt = new Date().toISOString();
+  // Save screenshot record to DB
+  upsert('Screenshots', {
+    id: uuidv4(),
+    session_id: currentSessionId,
+    employee_id: currentEmployee.id,
+    image_path: imagePath,
+    captured_at: capturedAt,
+    is_synced: 0,
+    last_modified: capturedAt,
+    deleted_at: null,
+  });
+  // Save activity log record to DB
+  upsert('ActivityLogs', {
+    id: uuidv4(),
+    session_id: currentSessionId,
+    employee_id: currentEmployee.id,
+    click_count: mouseActivityCount,
+    key_count: keyCount,
+    timestamp: capturedAt,
+    is_synced: 0,
+    last_modified: capturedAt,
+    deleted_at: null,
+  });
   console.log(`Screenshot saved: ${fileName}`);
   console.log(`Key presses detected since last screenshot: ${keyCount}`);
   console.log(`Mouse activity detected since last screenshot: ${mouseActivityCount}`);
@@ -233,10 +345,44 @@ ipcMain.on('resume-from-inactivity', () => {
   }
 });
 
-app.whenReady().then(() => {
+const SYNC_INTERVAL_MS = 2 * 60 * 1000; // 2 minutes
+let syncInterval = null;
+// Update SYNCED_TABLES to sync companies first
+const SYNCED_TABLES = ['companies', 'employees', 'sessions', 'screenshots', 'activitylogs'];
+
+// Add error handling to syncAllTables so one table's failure doesn't stop others
+async function syncAllTables(employee_id) {
+  for (const table of SYNCED_TABLES) {
+    try {
+      await syncTable(table, employee_id);
+    } catch (e) {
+      console.error(`[SYNC ALL] Failed to sync table ${table}:`, e);
+    }
+  }
+}
+
+// Replace this with actual logic to get the logged-in employee's ID
+function getCurrentEmployeeId() {
+  // TODO: Replace with real logic
+  return '1db38106-33dc-43c3-b6a2-172df641e001';
+}
+
+function startAutoSync() {
+  const employee_id = getCurrentEmployeeId();
+  // Initial sync on app start
+  syncAllTables(employee_id);
+  // Periodic sync every 2 minutes
+  if (syncInterval) clearInterval(syncInterval);
+  syncInterval = setInterval(() => {
+    syncAllTables(employee_id);
+  }, SYNC_INTERVAL_MS);
+}
+
+app.on('ready', () => {
   createGuideWindow();
   startHourlyScreenshotScheduler();
   startInactivityMonitor();
+  startAutoSync();
 });
 
 ipcMain.on('show-timer-window', () => {
@@ -246,6 +392,19 @@ ipcMain.on('show-timer-window', () => {
 
 ipcMain.on('timer-state', (event, newState) => {
   console.log('Timer state changed to:', newState);
+  console.log('currentEmployee:', currentEmployee);
+  console.log('currentSessionId:', currentSessionId);
+  if (newState === 'working') {
+    if (currentEmployee && !currentSessionId) {
+      currentSessionId = startNewSession(currentEmployee.id);
+      console.log('Started new session:', currentSessionId);
+    } else if (!currentEmployee) {
+      console.warn('Cannot start session: currentEmployee is not set. Please log in before starting the timer.');
+    }
+  } else if (timerState === 'working' && newState !== 'working') {
+    endCurrentSession();
+    console.log('Ended session');
+  }
   timerState = newState;
 });
 
@@ -272,4 +431,20 @@ ipcMain.handle('db:add-employee', (event, employee) => {
 
 ipcMain.handle('db:get-employees', () => {
   return db.prepare('SELECT * FROM Employees').all();
+});
+
+ipcMain.handle('login:employee', async (event, { email, password }) => {
+  const row = db.prepare('SELECT * FROM Employees WHERE email = ?').get(email);
+  if (!row) {
+    return { success: false, message: 'User not found' };
+  }
+  // Use bcrypt to compare hashed password
+  const valid = await bcrypt.compare(password, row.password);
+  if (!valid) {
+    return { success: false, message: 'Invalid password' };
+  }
+  // Set global current employee
+  currentEmployee = { id: row.id, name: row.name, email: row.email, role: row.role };
+  console.log('Logged in as:', currentEmployee); // Debug log
+  return { success: true, user: currentEmployee };
 });

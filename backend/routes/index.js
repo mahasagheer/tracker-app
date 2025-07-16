@@ -19,6 +19,9 @@ router.use('/projects', require('./projects'));
 // Unified auth route
 router.use('/auth', require('./auth'));
 
+// Sync route
+router.use('/sync', require('./sync'));
+
 // Future: router.use('/users', require('./users'));
 // Future: router.use('/employees', require('./employees'));
 
