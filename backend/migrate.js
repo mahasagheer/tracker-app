@@ -118,6 +118,9 @@ async function migrate() {
         employee_id UUID REFERENCES employees(id),
         click_count INT,
         key_count INT,
+        mouse_events INT,
+        keyboard_events INT,
+        productivity FLOAT,
         timestamp TIMESTAMP,
         is_synced BOOLEAN DEFAULT false,
         last_modified TIMESTAMP DEFAULT now(),
@@ -143,6 +146,9 @@ async function migrate() {
     await pool.query(`ALTER TABLE screenshots ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP;`);
     await pool.query(`ALTER TABLE activitylogs ADD COLUMN IF NOT EXISTS last_modified TIMESTAMP DEFAULT now();`);
     await pool.query(`ALTER TABLE activitylogs ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP;`);
+    await pool.query(`ALTER TABLE activitylogs ADD COLUMN IF NOT EXISTS mouse_events INT;`);
+    await pool.query(`ALTER TABLE activitylogs ADD COLUMN IF NOT EXISTS keyboard_events INT;`);
+    await pool.query(`ALTER TABLE activitylogs ADD COLUMN IF NOT EXISTS productivity FLOAT;`);
 
     // Ensure last_modified and deleted_at columns exist for companies (safe for existing data)
     // These lines are now moved up

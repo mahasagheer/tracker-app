@@ -73,6 +73,9 @@ CREATE TABLE IF NOT EXISTS ActivityLogs (
   employee_id TEXT,
   click_count INTEGER,
   key_count INTEGER,
+  mouse_events INTEGER,
+  keyboard_events INTEGER,
+  productivity REAL,
   timestamp TIMESTAMP,
   is_synced BOOLEAN DEFAULT 0,
   last_modified TEXT DEFAULT (datetime('now')),
@@ -114,6 +117,23 @@ try {
   if (!e.message.includes('duplicate column name')) throw e;
 }
 
+// Ensure mouse_events, keyboard_events, and productivity columns exist for ActivityLogs (for existing DBs)
+try {
+  db.exec(`ALTER TABLE ActivityLogs ADD COLUMN mouse_events INTEGER;`);
+} catch (e) {
+  if (!e.message.includes('duplicate column name')) throw e;
+}
+try {
+  db.exec(`ALTER TABLE ActivityLogs ADD COLUMN keyboard_events INTEGER;`);
+} catch (e) {
+  if (!e.message.includes('duplicate column name')) throw e;
+}
+try {
+  db.exec(`ALTER TABLE ActivityLogs ADD COLUMN productivity REAL;`);
+} catch (e) {
+  if (!e.message.includes('duplicate column name')) throw e;
+}
+
 // Upsert helpers for sync
 function upsert(table, row) {
   // Convert booleans to 0/1 for SQLite
@@ -122,6 +142,41 @@ function upsert(table, row) {
       row[key] = row[key] ? 1 : 0;
     }
   }
+
+  if (table === 'Employees' && row.email) {
+    const existing = db.prepare('SELECT id, last_modified FROM Employees WHERE email = ?').get(row.email);
+    if (existing) {
+      // If the id is different, update the id to match the incoming row
+      if (existing.id !== row.id) {
+        db.prepare('UPDATE Employees SET id = @id WHERE email = @email').run({ id: row.id, email: row.email });
+      }
+      // Only update if the incoming record is newer
+      if (!row.last_modified || new Date(row.last_modified) > new Date(existing.last_modified)) {
+        const fields = Object.keys(row).filter(f => f !== 'id');
+        const updates = fields.map(f => `${f} = @${f}`).join(', ');
+        const sql = `UPDATE Employees SET ${updates} WHERE id = @id`;
+        db.prepare(sql).run(row);
+      }
+      return;
+    }
+  }
+  if (table === 'Companies' && row.domain) {
+    const existing = db.prepare('SELECT id, last_modified FROM Companies WHERE domain = ?').get(row.domain);
+    if (existing) {
+      if (existing.id !== row.id) {
+        db.prepare('UPDATE Companies SET id = @id WHERE domain = @domain').run({ id: row.id, domain: row.domain });
+      }
+      if (!row.last_modified || new Date(row.last_modified) > new Date(existing.last_modified)) {
+        const fields = Object.keys(row).filter(f => f !== 'id');
+        const updates = fields.map(f => `${f} = @${f}`).join(', ');
+        const sql = `UPDATE Companies SET ${updates} WHERE id = @id`;
+        db.prepare(sql).run(row);
+      }
+      return;
+    }
+  }
+
+  // Default upsert by id
   const fields = Object.keys(row);
   const placeholders = fields.map(f => `@${f}`);
   const updates = fields.filter(f => f !== 'id').map(f => `${f} = @${f}`);
@@ -133,8 +188,25 @@ function getUnsynced(table, lastSync) {
   return db.prepare(`SELECT * FROM ${table} WHERE last_modified > ?`).all(lastSync);
 }
 
+// Utility to delete all data from all tables (but keep schema)
+function clearAllData() {
+  const tables = [
+    'ActivityLogs',
+    'Screenshots',
+    'Sessions',
+    'Employees',
+    'Companies',
+    'Admins',
+    'Settings'
+  ];
+  for (const table of tables) {
+    db.exec(`DELETE FROM ${table}`);
+  }
+}
+
 module.exports = {
   db,
   upsert,
-  getUnsynced
+  getUnsynced,
+  clearAllData
 }; 

@@ -6,6 +6,10 @@ const { v4: uuidv4 } = require('uuid');
 const { GlobalKeyboardListener } = require('node-global-key-listener');
 const { uIOhook, UiohookKey, UiohookMouse } = require('uiohook-napi');
 const { upsert, getUnsynced, db } = require('./db/database');
+// TEMP: Clear all SQLite data on app start (remove after running once)
+const { clearAllData } = require('./db/database');
+clearAllData();
+console.log('All data cleared from SQLite tables.');
 const axios = require('axios');
 const bcrypt = require('bcryptjs');
 
@@ -47,10 +51,27 @@ async function syncTable(table, employee_id) {
   }
 }
 
+const SYNCED_TABLES = ['companies', 'employees', 'sessions', 'screenshots', 'activitylogs'];
+
+// Add error handling to syncAllTables so one table's failure doesn't stop others
+async function syncAllTables(employee_id) {
+  for (const table of SYNCED_TABLES) {
+    try {
+      await syncTable(table, employee_id);
+    } catch (e) {
+      console.error(`[SYNC ALL] Failed to sync table ${table}:`, e);
+    }
+  }
+}
+
 ipcMain.handle('sync:now', async (event, employee_id) => {
-  await syncTable('sessions', employee_id);
-  await syncTable('screenshots', employee_id);
-  await syncTable('activitylogs', employee_id);
+  for (const table of SYNCED_TABLES) {
+    try {
+      await syncTable(table, employee_id);
+    } catch (e) {
+      console.error(`[SYNC NOW] Failed to sync table ${table}:`, e);
+    }
+  }
   return { status: 'ok' };
 });
 
@@ -271,6 +292,11 @@ async function captureAndSaveScreenshot(hour, minute) {
     employee_id: currentEmployee.id,
     click_count: mouseActivityCount,
     key_count: keyCount,
+    mouse_events: mouseActivityCount,
+    keyboard_events: keyCount,
+    productivity: overallProductivity,
+    mouse_activity_percent: mouseActivityPercent,
+    keyboard_activity_percent: keyboardActivityPercent,
     timestamp: capturedAt,
     is_synced: 0,
     last_modified: capturedAt,
@@ -348,23 +374,10 @@ ipcMain.on('resume-from-inactivity', () => {
 const SYNC_INTERVAL_MS = 2 * 60 * 1000; // 2 minutes
 let syncInterval = null;
 // Update SYNCED_TABLES to sync companies first
-const SYNCED_TABLES = ['companies', 'employees', 'sessions', 'screenshots', 'activitylogs'];
 
-// Add error handling to syncAllTables so one table's failure doesn't stop others
-async function syncAllTables(employee_id) {
-  for (const table of SYNCED_TABLES) {
-    try {
-      await syncTable(table, employee_id);
-    } catch (e) {
-      console.error(`[SYNC ALL] Failed to sync table ${table}:`, e);
-    }
-  }
-}
-
-// Replace this with actual logic to get the logged-in employee's ID
+// Return the id of the currently logged-in employee, or null if not logged in
 function getCurrentEmployeeId() {
-  // TODO: Replace with real logic
-  return '1db38106-33dc-43c3-b6a2-172df641e001';
+  return currentEmployee && currentEmployee.id ? currentEmployee.id : null;
 }
 
 function startAutoSync() {
@@ -421,12 +434,17 @@ async function takeScreenshot(sessionId) {
 }
 
 ipcMain.handle('db:add-employee', (event, employee) => {
+  // Check for duplicate email
+  const existing = db.prepare('SELECT id FROM Employees WHERE email = ?').get(employee.email);
+  if (existing) {
+    return { success: false, message: 'Employee with this email already exists.' };
+  }
   const stmt = db.prepare(
-    'INSERT INTO Employees (id, name, assigned_email, device_id, is_active) VALUES (?, ?, ?, ?, ?)' 
+    'INSERT INTO Employees (id, name, assigned_email, device_id, is_active, email) VALUES (?, ?, ?, ?, ?, ?)' 
   );
   const id = uuidv4();
-  stmt.run(id, employee.name, employee.assigned_email, employee.device_id, employee.is_active ?? 1);
-  return id;
+  stmt.run(id, employee.name, employee.assigned_email, employee.device_id, employee.is_active ?? 1, employee.email);
+  return { success: true, id };
 });
 
 ipcMain.handle('db:get-employees', () => {

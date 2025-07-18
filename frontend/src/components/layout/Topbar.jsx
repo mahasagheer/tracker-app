@@ -3,8 +3,9 @@ import Button from '../ui/Button';
 import { useAuthContext } from '../../auth/AuthContext';
 import { FiSun, FiMoon, FiMonitor, FiLogOut, FiSettings, FiBook, FiShoppingBag, FiUsers } from 'react-icons/fi';
 
-export default function Topbar() {
+export default function Topbar({ onSearch }) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [search, setSearch] = useState('');
   const menuRef = useRef();
   const { user, logout } = useAuthContext();
 
@@ -23,6 +24,11 @@ export default function Topbar() {
     window.location.href = '/';
   };
 
+  const handleSearchChange = (e) => {
+    setSearch(e.target.value);
+    if (onSearch) onSearch(e.target.value);
+  };
+
   return (
     <div className="top-0 z-20 flex items-center justify-between px-6 py-4 bg-transperent">
       <div className="flex-1 flex items-center">
@@ -30,6 +36,8 @@ export default function Topbar() {
           type="text"
           placeholder="Search for anything"
           className="w-full max-w-xs px-4 py-2 rounded-lg border border-accent bg-white text-dark focus:outline-none focus:ring-2 focus:ring-primary"
+          value={search}
+          onChange={handleSearchChange}
         />
       </div>
       <div className="flex items-center gap-4">

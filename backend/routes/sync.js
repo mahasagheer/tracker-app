@@ -4,7 +4,21 @@ const pool = require('../db');
 
 // Helper: upsert for a table
 async function upsertRecord(table, data, idField = 'id') {
-  // Build dynamic query for upsert
+  if (table === 'employees') {
+    // Check if an employee with the same email exists
+    const existing = await pool.query('SELECT id, last_modified FROM employees WHERE email = $1', [data.email]);
+    if (existing.rows.length > 0) {
+      // If the incoming record is newer, update the existing one
+      if (!data.last_modified || new Date(data.last_modified) > new Date(existing.rows[0].last_modified)) {
+        const fields = Object.keys(data).filter(f => f !== 'id');
+        const updates = fields.map((f, i) => `${f} = $${i + 2}`);
+        const sql = `UPDATE employees SET ${updates.join(', ')} WHERE id = $1`;
+        await pool.query(sql, [existing.rows[0].id, ...fields.map(f => data[f])]);
+      }
+      return;
+    }
+  }
+  // Default upsert logic for all other tables
   const fields = Object.keys(data);
   const values = fields.map((_, i) => `$${i + 1}`);
   const updates = fields.filter(f => f !== idField).map(f => `${f} = EXCLUDED.${f}`);

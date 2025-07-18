@@ -11,6 +11,7 @@ import { useAuthContext } from '../auth/AuthContext';
 export default function Team() {
   const [modalOpen, setModalOpen] = useState(false);
   const [employees, setEmployees] = useState([]);
+  const [filteredEmployees, setFilteredEmployees] = useState([]);
   const [viewMode, setViewMode] = useState('table');
   const dispatch = useDispatch();
   const { addEmployeeLoading, addEmployeeError, addEmployeeSuccess } = useSelector(state => state.auth);
@@ -22,10 +23,11 @@ export default function Team() {
         const res = await fetch(`/api/employees/admin/${user.id}`);
         const data = await res.json();
         setEmployees(data.employees || []);
+        setFilteredEmployees(data.employees || []);
       }
     }
     fetchEmployees();
-  }, [user]);
+  }, [user, addEmployeeSuccess]);
 
   const handleAddEmployee = async (form) => {
     await dispatch(addEmployee(form));
@@ -36,16 +38,25 @@ export default function Team() {
     dispatch(resetAddEmployeeState());
   };
 
+  const handleSearch = (query) => {
+    setFilteredEmployees(
+      employees.filter(emp =>
+        emp.name.toLowerCase().includes(query.toLowerCase()) ||
+        emp.email.toLowerCase().includes(query.toLowerCase())
+      )
+    );
+  };
+
   return (
-    <DashboardLayout>
+    <DashboardLayout onSearch={handleSearch}>
       {/* <div className="flex justify-end mb-4">
         <AddMembersButton onClick={() => setModalOpen(true)} />
       </div> */}
       <LeaderboardHeader setModalOpen={setModalOpen} view={viewMode} setView={setViewMode} />
       {viewMode === 'table' ? (
-        <LeaderboardTable employees={employees} />
+        <LeaderboardTable employees={filteredEmployees} />
       ) : (
-        <LeaderboardCardList employees={employees} />
+        <LeaderboardCardList employees={filteredEmployees} />
       )}
       <NewEmployeeModal
         isOpen={modalOpen}

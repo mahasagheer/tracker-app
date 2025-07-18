@@ -203,6 +203,7 @@ export default function Projects() {
   const [modalOpen, setModalOpen] = useState(false);
   const [assignModal, setAssignModal] = useState({ open: false, project: null });
   const [editModal, setEditModal] = useState({ open: false, project: null });
+  const [filteredProjects, setFilteredProjects] = useState([]);
 
   useEffect(() => {
     if (company_id) {
@@ -211,27 +212,40 @@ export default function Projects() {
         projects.forEach((project) => {
           dispatch(fetchProjectMembers(project.id));
         });
+        setFilteredProjects(projects);
       });
     }
   }, [dispatch, company_id]);
 
   // Filter projects for Time Reporter
-  let visibleProjects = projects;
+  let visibleProjects = filteredProjects;
   if (user?.role === 'Time Reporter') {
-    visibleProjects = projects.filter(
+    visibleProjects = filteredProjects.filter(
       project => (projectMembers[project.id] || []).some(emp => emp.id === user.id)
     );
   }
 
   const handleAddProject = async (form) => {
-    await dispatch(addProject(form));
+    const result = await dispatch(addProject(form));
     setModalOpen(false);
+    // If the project was added successfully, update filteredProjects
+    if (result.payload) {
+      setFilteredProjects(prev => [result.payload, ...prev]);
+    }
   };
 
   const handleEditProject = async (form) => {
     if (!editModal.project) return;
     await dispatch(updateProject({ id: editModal.project.id, data: form }));
     setEditModal({ open: false, project: null });
+  };
+
+  const handleSearch = (query) => {
+    setFilteredProjects(
+      projects.filter(proj =>
+        proj.name.toLowerCase().includes(query.toLowerCase())
+      )
+    );
   };
 
   const columns = [
@@ -244,7 +258,7 @@ export default function Projects() {
   ];
 
   return (
-    <DashboardLayout>
+    <DashboardLayout onSearch={handleSearch}>
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
         <h2 className="text-xl font-bold text-dark mr-4">Projects</h2>
         {user?.role === 'Admin' && (
@@ -268,13 +282,13 @@ export default function Projects() {
               <div className="text-xs text-gray-400">{new Date(project.created_at).toLocaleDateString()}</div>
             </td>
             <td className="py-2 px-4">
-              <span className={`px-2 py-1 rounded text-xs font-bold ${project.status === 'Completed' ? 'text-green-600 bg-green-100' : project.status === 'Running' ? 'text-blue-600 bg-blue-100' : project.status === 'Draft' ? 'text-yellow-600 bg-yellow-100' : project.status === 'Customer' ? 'text-emerald-600 bg-emerald-100' : 'text-gray-500 bg-gray-100'}`}>{project.status}</span>
+              <span className={`px-2 py-1 rounded-full text-xs font-bold ${project.status === 'Completed' ? 'text-green-600 bg-green-100' : project.status === 'Running' ? 'text-blue-600 bg-blue-100' : project.status === 'Draft' ? 'text-yellow-600 bg-yellow-100' : project.status === 'Customer' ? 'text-emerald-600 bg-emerald-100' : 'text-gray-500 bg-gray-100'}`}>{project.status}</span>
             </td>
             <td className="py-2 px-4">
               <div className="flex items-center -space-x-2">
                 {(projectMembers[project.id] || []).length === 0 ? (
                   user?.role === 'Admin' && (
-                    <Button onClick={() => setAssignModal({ open: true, project })} className="px-2 py-1 text-xs bg-accent text-primary rounded">Assign Members</Button>
+                    <Button onClick={() => setAssignModal({ open: true, project })} className="px-2 py-1 text-xs bg-accent text-dark rounded">Assign Members</Button>
                   )
                 ) : (
                   <>

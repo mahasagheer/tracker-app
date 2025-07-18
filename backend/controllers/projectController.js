@@ -1,4 +1,14 @@
 const pool = require('../db');
+const nodemailer = require('nodemailer');
+
+// Configure your transporter (use your real SMTP credentials)
+const transporter = nodemailer.createTransport({
+  service: 'gmail', // or your email provider
+  auth: {
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASS,
+  },
+});
 
 // Create a new project
 exports.createProject = async (req, res) => {
@@ -83,6 +93,26 @@ exports.assignMembers = async (req, res) => {
        ON CONFLICT (project_id, employee_id) DO NOTHING`,
       params
     );
+
+    // Fetch project details
+    const projectRes = await pool.query('SELECT * FROM projects WHERE id = $1', [id]);
+    const project = projectRes.rows[0];
+
+    // Fetch employee details and send emails
+    for (const employee_id of employee_ids) {
+      const empRes = await pool.query('SELECT * FROM employees WHERE id = $1', [employee_id]);
+      const employee = empRes.rows[0];
+      if (employee && employee.email) {
+        // Send email
+        await transporter.sendMail({
+          from: process.env.EMAIL_USER,
+          to: employee.email,
+          subject: `You have been assigned to project: ${project.name}`,
+          text: `Hello ${employee.name},\n\nYou have been assigned to the project \"${project.name}\".\n\nProject Details:\n- Status: ${project.status}\n- Completion Rate: ${project.completion_rate}%\n- Daily Work Limit: ${project.daily_work_limit} hours\n\nPlease check your dashboard for more details.\n\nBest regards,\nYour Team`,
+        });
+      }
+    }
+
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
