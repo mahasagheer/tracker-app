@@ -64,6 +64,16 @@ export const updateProject = createAsyncThunk(
   }
 );
 
+// Fetch monthly weekly session durations
+export const fetchMonthlyWeeklyDurations = createAsyncThunk(
+  'projects/fetchMonthlyWeeklyDurations',
+  async () => {
+    const res = await fetch('/api/sync/sessions/monthly-weekly-duration');
+    if (!res.ok) throw new Error('Failed to fetch durations');
+    return await res.json();
+  }
+);
+
 const projectsSlice = createSlice({
   name: 'projects',
   initialState: {
@@ -73,6 +83,9 @@ const projectsSlice = createSlice({
     employees: [],
     projectMembers: {}, // { [project_id]: [employee, ...] }
     membersLoading: false,
+    monthlyWeeklyDurations: null,
+    durationsLoading: false,
+    durationsError: null,
   },
   reducers: {},
   extraReducers: (builder) => {
@@ -127,6 +140,18 @@ const projectsSlice = createSlice({
         // Replace the updated project in the items array
         const idx = state.items.findIndex(p => p.id === action.payload.id);
         if (idx !== -1) state.items[idx] = action.payload;
+      })
+      .addCase(fetchMonthlyWeeklyDurations.pending, state => {
+        state.durationsLoading = true;
+        state.durationsError = null;
+      })
+      .addCase(fetchMonthlyWeeklyDurations.fulfilled, (state, action) => {
+        state.durationsLoading = false;
+        state.monthlyWeeklyDurations = action.payload;
+      })
+      .addCase(fetchMonthlyWeeklyDurations.rejected, (state, action) => {
+        state.durationsLoading = false;
+        state.durationsError = action.error.message;
       });
   },
 });

@@ -6,6 +6,7 @@ const fs = require('fs');
 // Ensure this runs only in main process
 const dbPath = path.join(app.getPath('userData'), 'trackerapp.db');
 const db = new Database(dbPath);
+db.pragma('journal_mode = WAL');
 
 // Schema setup (run only once)
 db.exec(`

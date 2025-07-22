@@ -274,6 +274,12 @@ async function captureAndSaveScreenshot(hour, minute) {
   const imagePath = path.join(folderPath, fileName);
   fs.writeFileSync(imagePath, image);
   const capturedAt = new Date().toISOString();
+
+  // Calculate productivity metrics before using them
+  const mouseActivityPercent = Math.min((mouseActivityCount / maxMouseEvents) * 100, 100).toFixed(2);
+  const keyboardActivityPercent = Math.min((keyCount / maxKeyEvents) * 100, 100).toFixed(2);
+  const overallProductivity = ((parseFloat(mouseActivityPercent) + parseFloat(keyboardActivityPercent)) / 2).toFixed(2);
+
   // Save screenshot record to DB
   upsert('Screenshots', {
     id: uuidv4(),
@@ -305,9 +311,6 @@ async function captureAndSaveScreenshot(hour, minute) {
   console.log(`Screenshot saved: ${fileName}`);
   console.log(`Key presses detected since last screenshot: ${keyCount}`);
   console.log(`Mouse activity detected since last screenshot: ${mouseActivityCount}`);
-  const mouseActivityPercent = Math.min((mouseActivityCount / maxMouseEvents) * 100, 100).toFixed(2);
-  const keyboardActivityPercent = Math.min((keyCount / maxKeyEvents) * 100, 100).toFixed(2);
-  const overallProductivity = ((parseFloat(mouseActivityPercent) + parseFloat(keyboardActivityPercent)) / 2).toFixed(2);
   console.log(`Mouse Activity %: ${mouseActivityPercent}%`);
   console.log(`Keyboard Activity %: ${keyboardActivityPercent}%`);
   console.log(`Overall Productivity %: ${overallProductivity}%`);
