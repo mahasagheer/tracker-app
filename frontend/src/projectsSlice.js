@@ -74,6 +74,16 @@ export const fetchMonthlyWeeklyDurations = createAsyncThunk(
   }
 );
 
+// Fetch productivity report for a user and date
+export const fetchProductivityReport = createAsyncThunk(
+  'projects/fetchProductivityReport',
+  async ({ userId, date }) => {
+    const res = await fetch(`/api/sync/productivity-report?userId=${userId}&date=${date}`);
+    if (!res.ok) throw new Error('Failed to fetch productivity report');
+    return await res.json();
+  }
+);
+
 const projectsSlice = createSlice({
   name: 'projects',
   initialState: {
@@ -86,6 +96,9 @@ const projectsSlice = createSlice({
     monthlyWeeklyDurations: null,
     durationsLoading: false,
     durationsError: null,
+    productivityReport: null,
+    productivityReportLoading: false,
+    productivityReportError: null,
   },
   reducers: {},
   extraReducers: (builder) => {
@@ -152,6 +165,18 @@ const projectsSlice = createSlice({
       .addCase(fetchMonthlyWeeklyDurations.rejected, (state, action) => {
         state.durationsLoading = false;
         state.durationsError = action.error.message;
+      })
+      .addCase(fetchProductivityReport.pending, state => {
+        state.productivityReportLoading = true;
+        state.productivityReportError = null;
+      })
+      .addCase(fetchProductivityReport.fulfilled, (state, action) => {
+        state.productivityReportLoading = false;
+        state.productivityReport = action.payload;
+      })
+      .addCase(fetchProductivityReport.rejected, (state, action) => {
+        state.productivityReportLoading = false;
+        state.productivityReportError = action.error.message;
       });
   },
 });

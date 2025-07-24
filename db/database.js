@@ -72,11 +72,11 @@ CREATE TABLE IF NOT EXISTS ActivityLogs (
   id TEXT PRIMARY KEY,
   session_id TEXT,
   employee_id TEXT,
-  click_count INTEGER,
-  key_count INTEGER,
   mouse_events INTEGER,
   keyboard_events INTEGER,
   productivity REAL,
+  mouse_activity_percent REAL,
+  keyboard_activity_percent REAL,
   timestamp TIMESTAMP,
   is_synced BOOLEAN DEFAULT 0,
   last_modified TEXT DEFAULT (datetime('now')),
@@ -133,6 +133,59 @@ try {
   db.exec(`ALTER TABLE ActivityLogs ADD COLUMN productivity REAL;`);
 } catch (e) {
   if (!e.message.includes('duplicate column name')) throw e;
+}
+try {
+  db.exec(`ALTER TABLE ActivityLogs ADD COLUMN mouse_activity_percent REAL;`);
+} catch (e) {
+  if (!e.message.includes('duplicate column name')) throw e;
+}
+try {
+  db.exec(`ALTER TABLE ActivityLogs ADD COLUMN keyboard_activity_percent REAL;`);
+} catch (e) {
+  if (!e.message.includes('duplicate column name')) throw e;
+}
+try {
+  db.exec(`ALTER TABLE ActivityLogs ADD COLUMN productivity_percent REAL;`);
+} catch (e) {
+  if (!e.message.includes('duplicate column name')) throw e;
+}
+
+// Remove click_count and key_count columns from ActivityLogs if they exist, and ensure id is PRIMARY KEY
+try {
+  const pragma = db.prepare("PRAGMA table_info(ActivityLogs)").all();
+  const hasClick = pragma.some(col => col.name === 'click_count');
+  const hasKey = pragma.some(col => col.name === 'key_count');
+  const hasPK = pragma.some(col => col.name === 'id' && col.pk === 1);
+  if (hasClick || hasKey || !hasPK) {
+    // Create new table with correct schema
+    db.exec(`CREATE TABLE IF NOT EXISTS ActivityLogs_new (
+      id TEXT PRIMARY KEY,
+      session_id TEXT,
+      employee_id TEXT,
+      mouse_events INTEGER,
+      keyboard_events INTEGER,
+      productivity REAL,
+      mouse_activity_percent REAL,
+      keyboard_activity_percent REAL,
+      timestamp TIMESTAMP,
+      is_synced BOOLEAN DEFAULT 0,
+      last_modified TEXT DEFAULT (datetime('now')),
+      deleted_at TEXT,
+      FOREIGN KEY (session_id) REFERENCES Sessions(id),
+      FOREIGN KEY (employee_id) REFERENCES Employees(id)
+    );`);
+    // Copy data from old table (only columns that exist in new schema)
+    const keepCols = [
+      'id','session_id','employee_id','mouse_events','keyboard_events','productivity',
+      'mouse_activity_percent','keyboard_activity_percent','timestamp','is_synced','last_modified','deleted_at'
+    ];
+    const existingCols = pragma.map(col => col.name).filter(name => keepCols.includes(name));
+    db.exec(`INSERT INTO ActivityLogs_new (${existingCols.join(',')}) SELECT ${existingCols.join(',')} FROM ActivityLogs`);
+    db.exec(`DROP TABLE ActivityLogs`);
+    db.exec(`ALTER TABLE ActivityLogs_new RENAME TO ActivityLogs`);
+  }
+} catch (e) {
+  // Ignore errors if columns do not exist
 }
 
 // Upsert helpers for sync

@@ -1,58 +1,18 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import DashboardLayout from '../components/layout/DashboardLayout';
 import { useAuthContext } from '../auth/AuthContext';
+import { useDispatch, useSelector } from 'react-redux';
+import { fetchProductivityReport } from '../projectsSlice';
+import Modal from '../components/ui/Modal';
 
-// Helper to get days in a month
+const monthNames = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December'
+];
+
 function getDaysInMonth(year, month) {
   return new Date(year, month + 1, 0).getDate();
 }
-
-// Only generate activity for weekdays (Mon-Fri)
-const generateDayHours = () => {
-  const hours = [];
-  for (let h = 9; h <= 17; h++) {
-    const screenshots = Array.from({ length: Math.floor(Math.random() * 4) + 1 }, (_, idx) => ({
-      time: `${h.toString().padStart(2, '0')}:${(idx * 10).toString().padStart(2, '0')}`,
-      img: 'https://placehold.co/80x60',
-    }));
-    hours.push({
-      hour: h,
-      screenshots,
-    });
-  }
-  return hours;
-};
-
-const generateMonthActivity = (year, month) => {
-  const daysInMonth = getDaysInMonth(year, month);
-  const data = [];
-  for (let i = 1; i <= daysInMonth; i++) {
-    const dateObj = new Date(year, month, i);
-    const dayOfWeek = dateObj.getDay();
-    // 0: Sunday, 6: Saturday
-    if (dayOfWeek === 0 || dayOfWeek === 6) {
-      // Weekend: no activity
-      data.push({
-        date: `${year}-${(month + 1).toString().padStart(2, '0')}-${i.toString().padStart(2, '0')}`,
-        mouse: null,
-        keyboard: null,
-        hours: null,
-        isWeekend: true,
-      });
-    } else {
-      // Weekday: random activity or possibly no activity
-      const hasActivity = Math.random() > 0.2; // 80% chance to have activity
-      data.push({
-        date: `${year}-${(month + 1).toString().padStart(2, '0')}-${i.toString().padStart(2, '0')}`,
-        mouse: hasActivity ? Math.floor(Math.random() * 100) : null,
-        keyboard: hasActivity ? Math.floor(Math.random() * 100) : null,
-        hours: hasActivity ? generateDayHours() : [],
-        isWeekend: false,
-      });
-    }
-  }
-  return data;
-};
 
 function getMonthMatrix(year, month) {
   const daysInMonth = getDaysInMonth(year, month);
@@ -72,11 +32,6 @@ function getMonthMatrix(year, month) {
   }
   return matrix;
 }
-
-const monthNames = [
-  'January', 'February', 'March', 'April', 'May', 'June',
-  'July', 'August', 'September', 'October', 'November', 'December'
-];
 
 function getInitialDate() {
   const today = new Date();
@@ -114,25 +69,31 @@ function getInitialDate() {
 
 export default function Activity() {
   const { user } = useAuthContext();
+  const dispatch = useDispatch();
   const initial = getInitialDate();
   const [selectedYear, setSelectedYear] = useState(initial.year);
   const [selectedMonth, setSelectedMonth] = useState(initial.month);
   const [selectedDay, setSelectedDay] = useState(initial.day);
-  const [monthActivity, setMonthActivity] = useState(() => generateMonthActivity(initial.year, initial.month));
-
-  React.useEffect(() => {
-    setMonthActivity(generateMonthActivity(selectedYear, selectedMonth));
-  }, [selectedYear, selectedMonth]);
-
   const daysInMonth = getDaysInMonth(selectedYear, selectedMonth);
   const monthMatrix = getMonthMatrix(selectedYear, selectedMonth);
-  const selectedData = monthActivity[selectedDay - 1];
+  const selectedDateStr = `${selectedYear}-${(selectedMonth + 1).toString().padStart(2, '0')}-${selectedDay.toString().padStart(2, '0')}`;
+
+  const { productivityReport, productivityReportLoading } = useSelector(state => state.projects);
+  const [previewImg, setPreviewImg] = useState(null);
+
+  // Fetch productivity report when user or selected date changes
+  useEffect(() => {
+    if (user?.id && selectedDateStr) {
+      dispatch(fetchProductivityReport({ userId: user.id, date: selectedDateStr }));
+    }
+  }, [user, selectedDateStr, dispatch]);
 
   // Only allow selecting weekdays
   const handleDaySelect = (day) => {
     if (!day) return;
-    const data = monthActivity[day - 1];
-    if (data.isWeekend) return;
+    const dateObj = new Date(selectedYear, selectedMonth, day);
+    const dayOfWeek = dateObj.getDay();
+    if (dayOfWeek === 0 || dayOfWeek === 6) return; // skip weekends
     setSelectedDay(day);
   };
 
@@ -152,7 +113,7 @@ export default function Activity() {
         }
         day = 1;
       }
-    } while (generateMonthActivity(year, month)[day - 1]?.isWeekend);
+    } while ([0, 6].includes(new Date(year, month, day).getDay()));
     setSelectedYear(year);
     setSelectedMonth(month);
     setSelectedDay(day);
@@ -174,40 +135,40 @@ export default function Activity() {
         }
         day = getDaysInMonth(year, month);
       }
-    } while (generateMonthActivity(year, month)[day - 1]?.isWeekend);
+    } while ([0, 6].includes(new Date(year, month, day).getDay()));
     setSelectedYear(year);
     setSelectedMonth(month);
     setSelectedDay(day);
   };
 
-  React.useEffect(() => {
-    if (selectedData?.isWeekend) {
-      // Auto-select next available weekday
-      let day = selectedDay;
-      let month = selectedMonth;
-      let year = selectedYear;
-      do {
-        if (day < daysInMonth) {
-          day++;
-        } else {
-          if (month === 11) {
-            year++;
-            month = 0;
-          } else {
-            month++;
-          }
-          day = 1;
-        }
-      } while (generateMonthActivity(year, month)[day - 1]?.isWeekend);
-      setSelectedYear(year);
-      setSelectedMonth(month);
-      setSelectedDay(day);
-    }
-    // eslint-disable-next-line
-  }, [selectedMonth, selectedYear]);
+  // Prepare data for selected day
+  const summary = productivityReport?.summary;
+  const hourly = productivityReport?.hourly || [];
 
   return (
     <DashboardLayout>
+      {/* Screenshot Preview Modal */}
+      <Modal isOpen={!!previewImg} onClose={() => setPreviewImg(null)}>
+        {previewImg && (
+          <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black bg-opacity-50">
+            <img
+              src={previewImg}
+              alt="Screenshot Preview"
+              className="max-w-[90vw] max-h-[90vh] object-contain rounded shadow-lg"
+              style={{ width: '100vw', height: '100vh' }}
+            />
+            <button
+              onClick={() => setPreviewImg(null)}
+              className="absolute top-6 right-6 p-3 bg-primary text-white rounded-full text-lg font-bold shadow-lg hover:bg-primary/80 transition flex items-center justify-center"
+              aria-label="Close"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+        )}
+      </Modal>
       <div className="bg-white rounded-xl shadow-lg overflow-hidden border border-accent">
         {/* Header */}
         <div className="text-xl font-bold bg-primary text-white px-6 py-3 rounded-t-xl flex items-center">
@@ -227,8 +188,8 @@ export default function Activity() {
               <div key={d} className="text-center font-bold text-primary">{d}</div>
             ))}
             {monthMatrix.flat().map((day, idx) => {
-              const data = day ? monthActivity[day - 1] : null;
-              const isWeekend = data?.isWeekend;
+              const dateObj = day ? new Date(selectedYear, selectedMonth, day) : null;
+              const isWeekend = dateObj ? [0, 6].includes(dateObj.getDay()) : false;
               return (
                 <div
                   key={idx}
@@ -238,10 +199,9 @@ export default function Activity() {
                   {day && (
                     <>
                       <div className="font-semibold text-lg">{day}</div>
-                      {!isWeekend && data && (
+                      {!isWeekend && (
                         <div className="flex gap-1 mt-1">
-                          <span className="text-xs">🖱️ {data.mouse !== null ? data.mouse + '%' : '-'}</span>
-                          <span className="text-xs">⌨️ {data.keyboard !== null ? data.keyboard + '%' : '-'}</span>
+                          {/* Optionally show summary info here */}
                         </div>
                       )}
                       {isWeekend && <div className="text-xs mt-1">No activity</div>}
@@ -255,34 +215,57 @@ export default function Activity() {
         {/* Selected day details: hour-by-hour breakdown */}
         <div className="px-6 pb-6">
           <div className="mb-2 text-lg font-semibold text-primary">Details for {monthNames[selectedMonth]} {selectedDay}, {selectedYear}</div>
-          {selectedData?.isWeekend || !selectedData?.hours || selectedData?.hours.length === 0 ? (
+          {productivityReportLoading ? (
+            <div className="bg-accent rounded-lg p-6 text-center text-gray-500 font-semibold text-lg">Loading...</div>
+          ) : !summary ? (
             <div className="bg-accent rounded-lg p-6 text-center text-gray-500 font-semibold text-lg">No activity for this day</div>
           ) : (
             <>
               <div className="flex flex-wrap gap-6 items-center mb-4">
                 <div className="bg-accent rounded-lg px-4 py-2 text-sm font-medium">User: <span className="font-semibold">{user?.name || 'N/A'}</span></div>
-                <div className="bg-accent rounded-lg px-4 py-2 text-sm font-medium">Mouse Activity: <span className="font-semibold">{selectedData?.mouse ?? '-'}%</span></div>
-                <div className="bg-accent rounded-lg px-4 py-2 text-sm font-medium">Keyboard Activity: <span className="font-semibold">{selectedData?.keyboard ?? '-'}%</span></div>
+                <div className="bg-accent rounded-lg px-4 py-2 text-sm font-medium">Mouse Activity: <span className="font-semibold">{summary?.total_mouse_activity ?? '-'}</span></div>
+                <div className="bg-accent rounded-lg px-4 py-2 text-sm font-medium">Keyboard Activity: <span className="font-semibold">{summary?.total_keyboard_activity ?? '-'}</span></div>
+                <div className="bg-accent rounded-lg px-4 py-2 text-sm font-medium">Overall Productivity: <span className="font-semibold">{summary?.overall_productivity_percent ?? '-'}</span></div>
               </div>
-              <div className="mb-2 font-semibold">Screenshots by Hour:</div>
+              <div className="mb-2 font-semibold">Screenshots & Activity by Hour:</div>
               <div className="space-y-4">
-                {selectedData?.hours?.map((hourBlock, idx) => (
-                  <div key={idx} className="bg-accent rounded-lg p-4">
-                    <div className="font-semibold mb-2">{hourBlock.hour}:00 - {hourBlock.hour + 1}:00</div>
-                    <div className="flex flex-wrap gap-4">
-                      {hourBlock.screenshots.length === 0 ? (
-                        <div className="text-gray-500 text-sm">No screenshots</div>
-                      ) : (
-                        hourBlock.screenshots.map((shot, i) => (
-                          <div key={i} className="flex flex-col items-center">
-                            <img src={shot.img} alt="screenshot" className="w-20 h-14 object-cover rounded border border-accent mb-1" />
-                            <div className="text-xs text-gray-600">{shot.time}</div>
-                          </div>
-                        ))
-                      )}
-                    </div>
-                  </div>
-                ))}
+                {/* Show hours starting from 10 AM */}
+                {(() => {
+                  // Reorder hourly blocks: 10 AM (10) to 23, then 0 to 9
+                  const startHour = 10;
+                  const ordered = [
+                    ...hourly.slice(startHour, 24),
+                    ...hourly.slice(0, startHour)
+                  ];
+                  return ordered.map((hourBlock, idx) => {
+                    const hour12 = ((hourBlock.hour + 11) % 12 + 1);
+                    const ampm = hourBlock.hour < 12 ? 'AM' : 'PM';
+                    const hourLabel = `${hour12} ${ampm}`;
+                    return (
+                      <div key={hourBlock.hour} className="bg-accent rounded-lg p-4">
+                        <div className="font-semibold mb-2">{hourLabel}</div>
+                        <div className="flex flex-wrap gap-4 items-center">
+                          <div className="text-sm text-gray-700">Mouse: <span className="font-bold">{hourBlock.mouse_activity}</span></div>
+                          <div className="text-sm text-gray-700">Keyboard: <span className="font-bold">{hourBlock.keyboard_activity}</span></div>
+                          <div className="text-sm text-gray-700">Productivity: <span className="font-bold">{hourBlock.productivity_score ?? '-'}</span></div>
+                          {hourBlock.screenshots.length === 0 ? (
+                            <div className="text-gray-500 text-sm">No screenshots</div>
+                          ) : (
+                            hourBlock.screenshots.map((shot, i) => {
+                              const imgUrl = shot.image_path.startsWith('http') ? shot.image_path : `http://localhost:5000/screenshots/${shot.image_path.split('test_screenshots').pop().replace(/^\\|\//, '').replace(/\\/g, '/').replace(/\//g, '/')}`;
+                              return (
+                                <div key={i} className="flex flex-col items-center cursor-pointer" onClick={() => setPreviewImg(imgUrl)}>
+                                  <img src={imgUrl} alt="screenshot" className="w-20 h-14 object-cover rounded border border-accent mb-1" />
+                                  <div className="text-xs text-gray-600">{new Date(shot.captured_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true })}</div>
+                                </div>
+                              );
+                            })
+                          )}
+                        </div>
+                      </div>
+                    );
+                  });
+                })()}
               </div>
             </>
           )}

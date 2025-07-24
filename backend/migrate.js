@@ -116,8 +116,6 @@ async function migrate() {
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         session_id UUID REFERENCES sessions(id),
         employee_id UUID REFERENCES employees(id),
-        click_count INT,
-        key_count INT,
         mouse_events INT,
         keyboard_events INT,
         productivity FLOAT,

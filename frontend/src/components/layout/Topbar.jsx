@@ -60,7 +60,6 @@ export default function Topbar({ onSearch }) {
               <div className="flex justify-between items-center bg-accent rounded-lg p-2 mb-2">
                 <button className="p-2 rounded-lg hover:bg-white"><FiSun /></button>
                 <button className="p-2 rounded-lg hover:bg-white"><FiMoon /></button>
-                <button className="p-2 rounded-lg hover:bg-white"><FiMonitor /></button>
               </div>
               {/* Menu Items */}
              {/** <button className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-accent text-dark text-sm font-medium">

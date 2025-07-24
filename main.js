@@ -296,8 +296,6 @@ async function captureAndSaveScreenshot(hour, minute) {
     id: uuidv4(),
     session_id: currentSessionId,
     employee_id: currentEmployee.id,
-    click_count: mouseActivityCount,
-    key_count: keyCount,
     mouse_events: mouseActivityCount,
     keyboard_events: keyCount,
     productivity: overallProductivity,

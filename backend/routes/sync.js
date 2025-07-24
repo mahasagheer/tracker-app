@@ -127,18 +127,17 @@ router.get('/sessions/weekly-duration', async (req, res) => {
 router.get('/sessions/monthly-weekly-duration', async (req, res) => {
   try {
     const today = new Date();
-    const year = today.getFullYear();
-    const month = today.getMonth(); // 0-based
-    // Find the first day of the month
-    const firstOfMonth = new Date(year, month, 1);
-    // Find the first Monday on or after the 1st
+    const year = today.getUTCFullYear();
+    const month = today.getUTCMonth(); // 0-based
+    // Find the first day of the month (UTC)
+    const firstOfMonth = new Date(Date.UTC(year, month, 1));
+    // Find the first Monday on or after the 1st (UTC)
     let firstMonday = new Date(firstOfMonth);
-    while (firstMonday.getDay() !== 1) {
-      firstMonday.setDate(firstMonday.getDate() + 1);
+    while (firstMonday.getUTCDay() !== 1) {
+      firstMonday.setUTCDate(firstMonday.getUTCDate() + 1);
     }
-    // Find the last day to include (today)
-    const lastDay = new Date(today);
-    lastDay.setHours(23, 59, 59, 999);
+    // Find the last day to include (today, UTC)
+    const lastDay = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate(), 23, 59, 59, 999));
 
     // Query all sessions for this month up to today
     const sql = `
@@ -150,18 +149,18 @@ router.get('/sessions/monthly-weekly-duration', async (req, res) => {
     const params = [firstMonday.toISOString(), lastDay.toISOString()];
     const result = await pool.query(sql, params);
 
-    // Helper to get week number in month (1-based, starting from first Monday)
+    // Helper to get week number in month (1-based, starting from first Monday, UTC)
     function getWeekNumber(date) {
       const diff = date - firstMonday;
       return Math.floor(diff / (7 * 24 * 60 * 60 * 1000)) + 1;
     }
-    // Helper to get week start/end for a given week number
+    // Helper to get week start/end for a given week number (UTC)
     function getWeekStartEnd(weekNum) {
       const start = new Date(firstMonday);
-      start.setDate(firstMonday.getDate() + (weekNum - 1) * 7);
+      start.setUTCDate(firstMonday.getUTCDate() + (weekNum - 1) * 7);
       const end = new Date(start);
-      end.setDate(start.getDate() + 4); // Friday
-      end.setHours(23, 59, 59, 999);
+      end.setUTCDate(start.getUTCDate() + 4); // Friday
+      end.setUTCHours(23, 59, 59, 999);
       // Don't go past today
       if (end > lastDay) end.setTime(lastDay.getTime());
       return { start, end };
@@ -177,11 +176,11 @@ router.get('/sessions/monthly-weekly-duration', async (req, res) => {
       weeks[weekNum] = {};
       for (let i = 0; i < days.length; i++) {
         const dayDate = new Date(start);
-        dayDate.setDate(start.getDate() + i);
+        dayDate.setUTCDate(start.getUTCDate() + i);
         // Only include up to today
         if (dayDate > lastDay) break;
-        // Only include days in this month
-        if (dayDate.getMonth() !== month) continue;
+        // Only include days in this month (UTC)
+        if (dayDate.getUTCMonth() !== month) continue;
         weeks[weekNum][days[i]] = 0;
       }
       weekNum++;
@@ -191,9 +190,9 @@ router.get('/sessions/monthly-weekly-duration', async (req, res) => {
     for (const row of result.rows) {
       const date = new Date(row.start_time);
       if (date < firstMonday || date > lastDay) continue;
-      if (date.getDay() < 1 || date.getDay() > 5) continue; // Mon-Fri only
+      if (date.getUTCDay() < 1 || date.getUTCDay() > 5) continue; // Mon-Fri only
       const week = getWeekNumber(date);
-      const dayName = days[date.getDay() - 1];
+      const dayName = days[date.getUTCDay() - 1];
       if (weeks[week] && weeks[week][dayName] !== undefined) {
         weeks[week][dayName] += row.total_duration_minutes || 0;
       }
@@ -220,6 +219,116 @@ router.get('/sessions/monthly-weekly-duration', async (req, res) => {
   } catch (err) {
     console.error('Error calculating monthly weekly session durations:', err);
     res.status(500).json({ error: 'Failed to calculate monthly weekly durations' });
+  }
+});
+
+// GET /api/sync/productivity-report?userId=...&date=YYYY-MM-DD
+router.get('/productivity-report', async (req, res) => {
+  try {
+    const { userId, date } = req.query;
+    if (!userId || !date) {
+      return res.status(400).json({ error: 'userId and date are required' });
+    }
+    // Validate date format (YYYY-MM-DD)
+    const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+    if (!dateRegex.test(date)) {
+      return res.status(400).json({ error: 'Invalid date format. Use YYYY-MM-DD.' });
+    }
+    // Calculate start and end of the day
+    const dayStart = new Date(date + 'T00:00:00.000Z');
+    const dayEnd = new Date(date + 'T23:59:59.999Z');
+    if (isNaN(dayStart.getTime()) || isNaN(dayEnd.getTime())) {
+      return res.status(400).json({ error: 'Invalid date value.' });
+    }
+
+    // Get all screenshots for the user and day, grouped by hour
+    const screenshotsSql = `
+      SELECT id, image_path, captured_at
+      FROM screenshots
+      WHERE employee_id = $1 AND captured_at >= $2 AND captured_at <= $3
+      ORDER BY captured_at ASC
+    `;
+    const screenshotsResult = await pool.query(screenshotsSql, [userId, dayStart.toISOString(), dayEnd.toISOString()]);
+    const screenshotsByHour = {};
+    screenshotsResult.rows.forEach(row => {
+      const hour = new Date(row.captured_at).getHours();
+      if (!screenshotsByHour[hour]) screenshotsByHour[hour] = [];
+      screenshotsByHour[hour].push({
+        id: row.id,
+        image_path: row.image_path,
+        captured_at: row.captured_at
+      });
+    });
+
+    // Get all activity logs for the user and day, grouped by hour
+    const activitySql = `
+      SELECT timestamp, mouse_events, keyboard_events, productivity
+      FROM activitylogs
+      WHERE employee_id = $1 AND timestamp >= $2 AND timestamp <= $3
+      ORDER BY timestamp ASC
+    `;
+    const activityResult = await pool.query(activitySql, [userId, dayStart.toISOString(), dayEnd.toISOString()]);
+    const activityByHour = {};
+    let totalMouse = 0, totalKeyboard = 0, totalProductivity = 0, count = 0;
+    activityResult.rows.forEach(row => {
+      const hour = new Date(row.timestamp).getHours();
+      if (!activityByHour[hour]) activityByHour[hour] = { mouse: 0, keyboard: 0, productivity: 0, count: 0 };
+      activityByHour[hour].mouse += row.mouse_events || 0;
+      activityByHour[hour].keyboard += row.keyboard_events || 0;
+      activityByHour[hour].productivity += parseFloat(row.productivity) || 0;
+      activityByHour[hour].count += 1;
+      totalMouse += row.mouse_events || 0;
+      totalKeyboard += row.keyboard_events || 0;
+      totalProductivity += parseFloat(row.productivity) || 0;
+      count++;
+    });
+
+    // Build hourly breakdown
+    const hourly = [];
+    for (let h = 0; h < 24; h++) {
+      const hourScreenshots = screenshotsByHour[h] || [];
+      const act = activityByHour[h] || { mouse: 0, keyboard: 0, productivity: 0, count: 0 };
+      hourly.push({
+        hour: h,
+        screenshots: hourScreenshots,
+        mouse_activity: act.mouse,
+        keyboard_activity: act.keyboard,
+        productivity_score: act.count ? (act.productivity / act.count).toFixed(2) : null
+      });
+    }
+
+    // Overall summary
+    const overallProductivity = count ? (totalProductivity / count).toFixed(2) : null;
+
+    // Calculate overall productivity percent for the day
+    // Use (mouse_activity_percent + keyboard_activity_percent + avg_screenshot_productivity) / 3
+    const maxMouseEventsPerDay = 1000;
+    const maxKeyboardEventsPerDay = 1000;
+    const mouseActivityPercent = maxMouseEventsPerDay ? (totalMouse / maxMouseEventsPerDay) * 100 : 0;
+    const keyboardActivityPercent = maxKeyboardEventsPerDay ? (totalKeyboard / maxKeyboardEventsPerDay) * 100 : 0;
+    // Average per-screenshot productivity (from all activity logs for the day)
+    const avgScreenshotProductivity = count ? (totalProductivity / count) : 0;
+    // Final overall productivity percent
+    let overallProductivityPercent = null;
+    if (count > 0) {
+      overallProductivityPercent = ((mouseActivityPercent + keyboardActivityPercent + avgScreenshotProductivity) / 3).toFixed(2);
+    }
+
+    res.json({
+      userId,
+      date,
+      hourly,
+      summary: {
+        total_mouse_activity: totalMouse,
+        total_keyboard_activity: totalKeyboard,
+        all_screenshots_by_hour: screenshotsByHour,
+        overall_productivity: overallProductivity,
+        overall_productivity_percent: overallProductivityPercent
+      }
+    });
+  } catch (err) {
+    console.error('Error generating productivity report:', err);
+    res.status(500).json({ error: 'Failed to generate productivity report' });
   }
 });
 
