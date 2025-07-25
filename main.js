@@ -90,10 +90,6 @@ gkl.addListener(function (e, down) {
   }
 });
 
-uIOhook.on('mousemove', event => {
-  mouseActivityCount++;
-});
-
 uIOhook.on('mousedown', event => {
   mouseActivityCount++;
 });
@@ -275,10 +271,25 @@ async function captureAndSaveScreenshot(hour, minute) {
   fs.writeFileSync(imagePath, image);
   const capturedAt = new Date().toISOString();
 
-  // Calculate productivity metrics before using them
-  const mouseActivityPercent = Math.min((mouseActivityCount / maxMouseEvents) * 100, 100).toFixed(2);
-  const keyboardActivityPercent = Math.min((keyCount / maxKeyEvents) * 100, 100).toFixed(2);
-  const overallProductivity = ((parseFloat(mouseActivityPercent) + parseFloat(keyboardActivityPercent)) / 2).toFixed(2);
+  // Calculate interval in minutes since last screenshot
+  // We'll use a global lastCaptureTime
+  if (!global.lastCaptureTime) global.lastCaptureTime = Date.now();
+  const nowTime = Date.now();
+  const intervalMinutes = (nowTime - global.lastCaptureTime) / 60000 || 1; // fallback to 1 min if first run
+  global.lastCaptureTime = nowTime;
+
+  // Calculate events per minute
+  const mouseEPM = (mouseActivityCount / intervalMinutes).toFixed(2);
+  const keyboardEPM = (keyCount / intervalMinutes).toFixed(2);
+
+  // Calculate percentage (relative to max events per interval, capped at 100%)
+  const maxMouseEventsPerInterval = 1000 * intervalMinutes; // scale max to interval
+  const maxKeyboardEventsPerInterval = 1000 * intervalMinutes;
+  const mouseActivityPercent = Math.min((mouseActivityCount / maxMouseEventsPerInterval) * 100, 100).toFixed(2);
+  const keyboardActivityPercent = Math.min((keyCount / maxKeyboardEventsPerInterval) * 100, 100).toFixed(2);
+
+  // Calculate productivity as a weighted average (e.g., 50% mouse, 50% keyboard)
+  const productivity = ((parseFloat(mouseEPM) + parseFloat(keyboardEPM)) / 2).toFixed(2);
 
   // Save screenshot record to DB
   upsert('Screenshots', {
@@ -296,22 +307,22 @@ async function captureAndSaveScreenshot(hour, minute) {
     id: uuidv4(),
     session_id: currentSessionId,
     employee_id: currentEmployee.id,
-    mouse_events: mouseActivityCount,
-    keyboard_events: keyCount,
-    productivity: overallProductivity,
-    mouse_activity_percent: mouseActivityPercent,
-    keyboard_activity_percent: keyboardActivityPercent,
+    mouse_events: mouseEPM, // events per minute
+    keyboard_events: keyboardEPM, // events per minute
+    productivity: productivity, // weighted EPM average
+    mouse_activity_percent: mouseActivityPercent, // percent of max
+    keyboard_activity_percent: keyboardActivityPercent, // percent of max
     timestamp: capturedAt,
     is_synced: 0,
     last_modified: capturedAt,
     deleted_at: null,
   });
   console.log(`Screenshot saved: ${fileName}`);
-  console.log(`Key presses detected since last screenshot: ${keyCount}`);
-  console.log(`Mouse activity detected since last screenshot: ${mouseActivityCount}`);
+  console.log(`Mouse EPM: ${mouseEPM}`);
+  console.log(`Keyboard EPM: ${keyboardEPM}`);
   console.log(`Mouse Activity %: ${mouseActivityPercent}%`);
   console.log(`Keyboard Activity %: ${keyboardActivityPercent}%`);
-  console.log(`Overall Productivity %: ${overallProductivity}%`);
+  console.log(`Productivity (EPM avg): ${productivity}`);
   keyCount = 0;
   mouseActivityCount = 0;
   if (timerWindow) {

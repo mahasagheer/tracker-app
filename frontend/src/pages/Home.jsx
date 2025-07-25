@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Button from '../components/ui/Button';
 import Input from '../components/ui/Input';
 import Modal from '../components/ui/Modal';
@@ -18,6 +18,23 @@ export default function Home() {
   const { signupLoading, signupError, signupSuccess } = useSelector(state => state.auth);
   const { user, userType, loading: authLoading, error: authError, login, logout } = useAuthContext();
   const navigate = useNavigate();
+
+  // Auto-navigate if user is in localStorage
+  useEffect(() => {
+    const storedUser = localStorage.getItem('user');
+    if (storedUser) {
+      try {
+        const userObj = JSON.parse(storedUser);
+        if (userObj && userObj.role) {
+          if (userObj.role === 'Admin') {
+            navigate('/dashboard');
+          } else if (userObj.role === 'Time Reporter' || userObj.role === 'Employee') {
+            navigate('/summary');
+          }
+        }
+      } catch (e) {}
+    }
+  }, [navigate]);
 
   const handleLoginChange = e => setLoginData({ ...loginData, [e.target.name]: e.target.value });
   const handleSignupChange = e => setSignupData({ ...signupData, [e.target.name]: e.target.value });
@@ -59,12 +76,7 @@ export default function Home() {
             GreenVision
           </span>
         </div>
-        {user ? (
-          <div className="flex items-center gap-4">
-            <span className="text-dark font-semibold">{user.name}</span>
-            <Button variant="dark" className="px-5 py-2 text-base" onClick={logout}>Logout</Button>
-        </div>
-        ) : (
+        {user ? null : (
           <Button variant="dark" className="px-7 py-2 text-lg shadow-none" onClick={() => setShowLogin(true)}>Login</Button>
         )}
       </header>

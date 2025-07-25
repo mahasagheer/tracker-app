@@ -21,7 +21,7 @@ export default function Sidebar({ collapsed, onToggle }) {
   const navItems = user?.role === 'Time Reporter' ? employeeNavItems : adminNavItems;
 
   return (
-    <aside className={`fixed left-0 top-0 ${collapsed ? 'w-20' : 'w-64'} bg-light  flex flex-col py-6 h-screen z-30 transition-all duration-300`}>
+    <aside className={`fixed left-0 top-0 ${collapsed ? 'w-20' : 'w-64'} bg-light  flex flex-col py-6 h-screen z-10 transition-all duration-300`}>
       <div className={`mb-10 ${collapsed ? 'ml-0 flex justify-center' : 'ml-5'}`}>
       <span className="font-bold text-2xl text-dark tracking-tight flex items-center gap-2">
             <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -48,7 +48,7 @@ export default function Sidebar({ collapsed, onToggle }) {
       </nav>
       <button
         onClick={onToggle}
-        className={`absolute top-20 -right-2 bg-white border rounded-full shadow p-1 transition-transform ${collapsed ? 'rotate-180' : ''}`}
+        className={`absolute top-20 -right-2 m-2 bg-[#f7f8fa] rounded-full p-1 transition-transform ${collapsed ? 'rotate-180' : ''}`}
         aria-label="Toggle sidebar"
       >
         {collapsed ? <FiChevronRight size={20} /> : <FiChevronLeft size={20} />}

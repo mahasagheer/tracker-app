@@ -12,7 +12,7 @@ import {
   subMonths,
 } from 'date-fns';
 
-export default function EmployeeCalendar({ title, events = [], initialMonth }) {
+export default function EmployeeCalendar({ title, events = [], initialMonth, onDateClick }) {
   const [currentMonth, setCurrentMonth] = React.useState(initialMonth || new Date());
 
   function getEventsForDate(date) {
@@ -81,23 +81,28 @@ export default function EmployeeCalendar({ title, events = [], initialMonth }) {
           <tbody>
             {rows.map((week, idx) => (
               <tr key={idx} className="border-b last:border-0">
-                {week.map((date, i) => (
-                  <td
-                    key={i}
-                    className={`align-top p-2 border border-accent/30 ${!isSameMonth(date, monthStart) ? 'text-gray-300 bg-accent/50' : 'bg-white'} ${isSameDay(date, new Date()) ? 'border-primary border-2' : ''}`}
-                    style={{ minWidth: 80, height: 80 }}
-                  >
-                    <div className="text-xs font-semibold text-dark flex items-center gap-1 justify-center">
-                      {format(date, 'd')}
-                      {isSameDay(date, new Date()) && <span className="ml-1 px-2 py-0.5 rounded bg-primary/10 text-primary text-xs">TODAY</span>}
-                    </div>
-                    <div className="flex flex-col items-center mt-1">
-                      {getEventsForDate(date).map((t, j) => (
-                        <span key={j} className="text-primary text-sm font-mono">{t}</span>
-                      ))}
-                    </div>
-                  </td>
-                ))}
+                {week.map((date, i) => {
+                  const isCurrentMonth = isSameMonth(date, monthStart);
+                  const dateStr = format(date, 'yyyy-MM-dd');
+                  return (
+                    <td
+                      key={i}
+                      className={`align-top p-2 border border-accent/30 ${!isCurrentMonth ? 'text-gray-300 bg-accent/50' : 'bg-white'} ${isSameDay(date, new Date()) ? 'border-primary border-2' : ''}`}
+                      style={{ minWidth: 80, height: 80 }}
+                      onClick={isCurrentMonth && onDateClick ? () => onDateClick(dateStr) : undefined}
+                    >
+                      <div className="text-xs font-semibold text-dark flex items-center gap-1 justify-center">
+                        {format(date, 'd')}
+                        {isSameDay(date, new Date()) && <span className="ml-1 px-2 py-0.5 rounded bg-primary/10 text-primary text-xs">TODAY</span>}
+                      </div>
+                      <div className="flex flex-col items-center mt-1">
+                        {getEventsForDate(date).map((t, j) => (
+                          <span key={j} className="text-primary text-sm font-mono">{t}</span>
+                        ))}
+                      </div>
+                    </td>
+                  );
+                })}
                 <td className="text-right font-bold text-primary pr-2 align-middle">
                   {sumWeekHours(week)}
                 </td>

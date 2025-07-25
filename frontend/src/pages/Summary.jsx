@@ -12,8 +12,10 @@ export default function Summary() {
   const { monthlyWeeklyDurations, durationsLoading } = useSelector(state => state.projects);
 
   useEffect(() => {
-    dispatch(fetchMonthlyWeeklyDurations());
-  }, [dispatch]);
+    if (user?.id) {
+      dispatch(fetchMonthlyWeeklyDurations(user.id));
+    }
+  }, [dispatch, user]);
 
   // Transform backend response to calendar events format
   let events = [];

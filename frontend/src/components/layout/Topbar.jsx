@@ -30,7 +30,7 @@ export default function Topbar({ onSearch }) {
   };
 
   return (
-    <div className="top-0 z-20 flex items-center justify-between px-6 py-4 bg-transperent">
+    <div className="top-0 z-10 flex items-center justify-between px-6 py-4 bg-transperent">
       <div className="flex-1 flex items-center">
         <input
           type="text"
@@ -43,14 +43,26 @@ export default function Topbar({ onSearch }) {
       <div className="flex items-center gap-4">
         <div className="relative" ref={menuRef}>
           <button onClick={() => setMenuOpen(v => !v)} className="flex items-center gap-2 focus:outline-none">
-            <img src={user?.avatar || 'https://randomuser.me/api/portraits/men/32.jpg'} alt="avatar" className="w-9 h-9 rounded-full border-2 border-primary" />
+            {user?.avatar ? (
+              <img src={user.avatar} alt="avatar" className="w-9 h-9 rounded-full border-2 border-primary" />
+            ) : (
+              <div className="w-9 h-9 rounded-full border-2 border-primary bg-primary text-white flex items-center justify-center font-bold text-lg uppercase">
+                {user?.name ? user.name[0] : '?'}
+              </div>
+            )}
             <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2"><path d="M6 9l6 6 6-6" /></svg>
           </button>
           {menuOpen && (
             <div className="absolute right-0 mt-2 w-80 bg-white rounded-xl shadow-lg border z-50 py-4 px-4 flex flex-col gap-2">
               {/* User Info */}
               <div className="flex items-center gap-3 mb-2">
-                <img src={user?.avatar || 'https://randomuser.me/api/portraits/men/32.jpg'} alt="avatar" className="w-12 h-12 rounded-full border-2 border-primary" />
+                {user?.avatar ? (
+                  <img src={user.avatar} alt="avatar" className="w-12 h-12 rounded-full border-2 border-primary" />
+                ) : (
+                  <div className="w-12 h-12 rounded-full border-2 border-primary bg-primary text-white flex items-center justify-center font-bold text-2xl uppercase">
+                    {user?.name ? user.name[0] : '?'}
+                  </div>
+                )}
                 <div>
                   <div className="font-bold text-dark">{user?.name}</div>
                   <div className="text-xs text-dark/60">{user?.email}</div>

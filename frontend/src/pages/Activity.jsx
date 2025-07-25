@@ -4,6 +4,10 @@ import { useAuthContext } from '../auth/AuthContext';
 import { useDispatch, useSelector } from 'react-redux';
 import { fetchProductivityReport } from '../projectsSlice';
 import Modal from '../components/ui/Modal';
+import { FiArrowRight, FiArrowLeft } from 'react-icons/fi';
+import { ReactComponent as MouseIcon } from '../assets/mouse-svgrepo-com.svg';
+import { ReactComponent as KeyboardIcon } from '../assets/keyboard1-svgrepo-com.svg';
+import { ReactComponent as ProductivityIcon } from '../assets/productivity-svgrepo-com.svg';
 
 const monthNames = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -144,6 +148,7 @@ export default function Activity() {
   // Prepare data for selected day
   const summary = productivityReport?.summary;
   const hourly = productivityReport?.hourly || [];
+  const upcomingMessage = productivityReport?.message;
 
   return (
     <DashboardLayout>
@@ -169,106 +174,135 @@ export default function Activity() {
           </div>
         )}
       </Modal>
-      <div className="bg-white rounded-xl shadow-lg overflow-hidden border border-accent">
-        {/* Header */}
-        <div className="text-xl font-bold bg-primary text-white px-6 py-3 rounded-t-xl flex items-center">
-          Activity Calendar
-        </div>
-        {/* Calendar grid */}
-        <div className="p-6">
-          <div className="flex items-center justify-between mb-4">
-            <div className="text-lg font-semibold">{monthNames[selectedMonth]} {selectedYear}</div>
-            <div className="flex gap-2">
-              <button onClick={handlePrev} className="px-3 py-1 rounded bg-accent text-primary font-bold hover:bg-primary/10">Prev</button>
-              <button onClick={handleNext} className="px-3 py-1 rounded bg-accent text-primary font-bold hover:bg-primary/10">Next</button>
+      <div className="flex flex-col lg:flex-row gap-6">
+        {/* Main Content (Left) */}
+        <div className="flex-1 min-w-0">
+          <div className="bg-white rounded-xl shadow-lg overflow-hidden border border-accent">
+            {/* Header */}
+            <div className="text-xl font-bold bg-primary px-6 py-3 rounded-t-xl flex items-center">
+              Activity Calendar
             </div>
-          </div>
-          <div className="grid grid-cols-7 gap-2 bg-accent rounded-lg p-2">
-            {["Sun","Mon","Tue","Wed","Thu","Fri","Sat"].map((d) => (
-              <div key={d} className="text-center font-bold text-primary">{d}</div>
-            ))}
-            {monthMatrix.flat().map((day, idx) => {
-              const dateObj = day ? new Date(selectedYear, selectedMonth, day) : null;
-              const isWeekend = dateObj ? [0, 6].includes(dateObj.getDay()) : false;
-              return (
-                <div
-                  key={idx}
-                  className={`h-20 rounded-lg flex flex-col items-center justify-center transition border ${day ? (isWeekend ? 'bg-gray-200 text-gray-400 border-gray-200 cursor-not-allowed' : (day === selectedDay ? 'bg-primary text-white border-primary cursor-pointer' : 'bg-white hover:bg-primary/10 border-accent cursor-pointer')) : 'bg-transparent border-transparent cursor-default'}`}
-                  onClick={() => handleDaySelect(day)}
-                >
-                  {day && (
-                    <>
-                      <div className="font-semibold text-lg">{day}</div>
-                      {!isWeekend && (
-                        <div className="flex gap-1 mt-1">
-                          {/* Optionally show summary info here */}
-                        </div>
-                      )}
-                      {isWeekend && <div className="text-xs mt-1">No activity</div>}
-                    </>
-                  )}
+            {/* Calendar grid */}
+            <div className="p-6">
+              <div className="flex items-center justify-between">
+                <div className="text-lg font-semibold">Details for {monthNames[selectedMonth]} {selectedDay}, {selectedYear}</div>
+                <div className="flex gap-2">
+                  <button onClick={handlePrev} className="px-3 py-1 rounded bg-accent font-bold hover:bg-primary/10">
+                    <FiArrowLeft className="w-5 h-5" />
+                  </button>
+                  <button onClick={handleNext} className="px-3 py-1 rounded bg-accent font-bold hover:bg-primary/10">
+                    <FiArrowRight className="w-5 h-5" />
+                  </button>
                 </div>
-              );
-            })}
-          </div>
-        </div>
-        {/* Selected day details: hour-by-hour breakdown */}
-        <div className="px-6 pb-6">
-          <div className="mb-2 text-lg font-semibold text-primary">Details for {monthNames[selectedMonth]} {selectedDay}, {selectedYear}</div>
-          {productivityReportLoading ? (
-            <div className="bg-accent rounded-lg p-6 text-center text-gray-500 font-semibold text-lg">Loading...</div>
-          ) : !summary ? (
-            <div className="bg-accent rounded-lg p-6 text-center text-gray-500 font-semibold text-lg">No activity for this day</div>
-          ) : (
-            <>
-              <div className="flex flex-wrap gap-6 items-center mb-4">
-                <div className="bg-accent rounded-lg px-4 py-2 text-sm font-medium">User: <span className="font-semibold">{user?.name || 'N/A'}</span></div>
-                <div className="bg-accent rounded-lg px-4 py-2 text-sm font-medium">Mouse Activity: <span className="font-semibold">{summary?.total_mouse_activity ?? '-'}</span></div>
-                <div className="bg-accent rounded-lg px-4 py-2 text-sm font-medium">Keyboard Activity: <span className="font-semibold">{summary?.total_keyboard_activity ?? '-'}</span></div>
-                <div className="bg-accent rounded-lg px-4 py-2 text-sm font-medium">Overall Productivity: <span className="font-semibold">{summary?.overall_productivity_percent ?? '-'}</span></div>
               </div>
-              <div className="mb-2 font-semibold">Screenshots & Activity by Hour:</div>
-              <div className="space-y-4">
-                {/* Show hours starting from 10 AM */}
-                {(() => {
-                  // Reorder hourly blocks: 10 AM (10) to 23, then 0 to 9
-                  const startHour = 10;
-                  const ordered = [
-                    ...hourly.slice(startHour, 24),
-                    ...hourly.slice(0, startHour)
-                  ];
-                  return ordered.map((hourBlock, idx) => {
-                    const hour12 = ((hourBlock.hour + 11) % 12 + 1);
-                    const ampm = hourBlock.hour < 12 ? 'AM' : 'PM';
-                    const hourLabel = `${hour12} ${ampm}`;
-                    return (
+            </div>
+            {/* Selected day details: hour-by-hour breakdown */}
+            <div className="px-6 pb-6">
+              {productivityReportLoading ? (
+                <div className="bg-accent rounded-lg p-6 text-center text-gray-500 font-semibold text-lg">Loading...</div>
+              ) : upcomingMessage ? (
+                <div className="bg-accent rounded-lg p-6 text-center text-gray-500 font-semibold text-lg">{upcomingMessage}</div>
+              ) : !summary ? (
+                <div className="bg-accent rounded-lg p-6 text-center text-gray-500 font-semibold text-lg">No activity for this day</div>
+              ) : (
+                <>
+                  <div className="mb-2 font-semibold">Screenshots & Activity by Hour:</div>
+                  <div className="space-y-2">
+                    {hourly.map((hourBlock, idx) => (
                       <div key={hourBlock.hour} className="bg-accent rounded-lg p-4">
-                        <div className="font-semibold mb-2">{hourLabel}</div>
-                        <div className="flex flex-wrap gap-4 items-center">
-                          <div className="text-sm text-gray-700">Mouse: <span className="font-bold">{hourBlock.mouse_activity}</span></div>
-                          <div className="text-sm text-gray-700">Keyboard: <span className="font-bold">{hourBlock.keyboard_activity}</span></div>
-                          <div className="text-sm text-gray-700">Productivity: <span className="font-bold">{hourBlock.productivity_score ?? '-'}</span></div>
-                          {hourBlock.screenshots.length === 0 ? (
-                            <div className="text-gray-500 text-sm">No screenshots</div>
-                          ) : (
-                            hourBlock.screenshots.map((shot, i) => {
-                              const imgUrl = shot.image_path.startsWith('http') ? shot.image_path : `http://localhost:5000/screenshots/${shot.image_path.split('test_screenshots').pop().replace(/^\\|\//, '').replace(/\\/g, '/').replace(/\//g, '/')}`;
-                              return (
-                                <div key={i} className="flex flex-col items-center cursor-pointer" onClick={() => setPreviewImg(imgUrl)}>
-                                  <img src={imgUrl} alt="screenshot" className="w-20 h-14 object-cover rounded border border-accent mb-1" />
-                                  <div className="text-xs text-gray-600">{new Date(shot.captured_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true })}</div>
-                                </div>
-                              );
-                            })
-                          )}
+                        <div className="font-semibold mb-2">{hourBlock.label}</div>
+                        <div className='flex flex-row'>
+                          <div className="w-32">
+                            <div className="flex flex-col gap-2 w-auto">
+                              <div className="flex items-center text-sm text-gray-700">
+                                <MouseIcon width={20} height={20} className="w-4 h-4 mr-1" />
+                                <span className="font-bold">{hourBlock.mouse_activity_percent ?? '-'}%</span>
+                              </div>
+                              <div className="flex items-center text-sm text-gray-700">
+                                <KeyboardIcon width={20} height={20} className="w-4 h-4 mr-1" />
+                                <span className="font-bold">{hourBlock.keyboard_activity_percent ?? '-'}%</span>
+                              </div>
+                            </div>
+                          </div>
+                          <div className="flex flex-row flex-wrap gap-2 items-center ml-4">
+                            {hourBlock.screenshots.length === 0 ? (
+                              <div className="text-gray-500 text-sm">No screenshots</div>
+                            ) : (
+                              hourBlock.screenshots.map((shot, i) => {
+                                const imgUrl = shot.image_path.startsWith('http') ? shot.image_path : `http://localhost:5000/screenshots/${shot.image_path.split('test_screenshots').pop().replace(/^\\|\//, '').replace(/\\/g, '/').replace(/\//g, '/')}`;
+                                return (
+                                  <div key={i} className="flex flex-col items-center cursor-pointer" onClick={() => setPreviewImg(imgUrl)}>
+                                    <img src={imgUrl} alt="screenshot" className="w-20 h-14 object-cover rounded border border-accent mb-1" />
+                                    <div className="text-xs text-gray-600">{new Date(shot.captured_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true })}</div>
+                                  </div>
+                                );
+                              })
+                            )}
+                          </div>
                         </div>
                       </div>
-                    );
-                  });
-                })()}
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+        {/* Sidebar (Right) */}
+        <div className="hidden lg:block w-full max-w-xs flex-shrink-0">
+          <div className="bg-white rounded-xl shadow-lg border border-accent p-6 sticky top-8">
+            <div className="mb-4">
+              <div className="text-lg font-bold mb-1">Summary</div>
+              <div className="text-sm text-gray-500">{user?.name ? `User: ${user.name}` : ''}</div>
+              <div className="text-sm text-gray-500">Date: {monthNames[selectedMonth]} {selectedDay}, {selectedYear}</div>
+            </div>
+            {summary && (
+              <div className="flex flex-col gap-3 mb-6">
+                <div className="flex items-center gap-2 bg-accent rounded-lg px-3 py-2">
+                  <MouseIcon width={16} height={16} className="w-4 h-4" />
+                  <span className="font-semibold">{summary?.overall_mouse_activity_percent ?? '-'}%</span>
+                  <span className="text-xs text-gray-500">Mouse</span>
+                </div>
+                <div className="flex items-center gap-2 bg-accent rounded-lg px-3 py-2">
+                  <KeyboardIcon width={16} height={16} className="w-4 h-4" />
+                  <span className="font-semibold">{summary?.overall_keyboard_activity_percent ?? '-'}%</span>
+                  <span className="text-xs text-gray-500">Keyboard</span>
+                </div>
+                <div className="flex items-center gap-2 bg-accent rounded-lg px-3 py-2">
+                  <ProductivityIcon width={16} height={16} className="w-4 h-4" />
+                  <span className="font-semibold">{summary?.overall_productivity_percent ?? '-'}%</span>
+                  <span className="text-xs text-gray-500">Productivity</span>
+                </div>
               </div>
-            </>
-          )}
+            )}
+            {/* Screenshot Gallery */}
+            {hourly && hourly.some(h => h.screenshots && h.screenshots.length > 0) && (
+              <div>
+                <div className="font-semibold mb-2">All Screenshots</div>
+                <div className="grid grid-cols-3 gap-2">
+                  {hourly.flatMap(h => h.screenshots.map((shot, i) => {
+                    const imgUrl = shot.image_path.startsWith('http') ? shot.image_path : `http://localhost:5000/screenshots/${shot.image_path.split('test_screenshots').pop().replace(/^\\|\//, '').replace(/\\/g, '/').replace(/\//g, '/')}`;
+                    return (
+                      <img
+                        key={shot.id || i}
+                        src={imgUrl}
+                        alt="screenshot"
+                        className="w-full h-16 object-cover rounded border border-accent cursor-pointer"
+                        onClick={() => setPreviewImg(imgUrl)}
+                      />
+                    );
+                  }))}
+                </div>
+              </div>
+            )}
+            {/* Optional: Legend or tips */}
+            <div className="mt-6 text-xs text-gray-400">
+              <div className="mb-1 font-semibold text-gray-500">Legend:</div>
+              <div className="flex items-center gap-2 mb-1"><MouseIcon width={12} height={12} className="w-3 h-3" /> Mouse Activity</div>
+              <div className="flex items-center gap-2 mb-1"><KeyboardIcon width={12} height={12} className="w-3 h-3" /> Keyboard Activity</div>
+              <div className="flex items-center gap-2"><ProductivityIcon width={12} height={12} className="w-3 h-3" /> Productivity</div>
+            </div>
+          </div>
         </div>
       </div>
     </DashboardLayout>

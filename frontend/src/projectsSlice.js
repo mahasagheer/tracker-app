@@ -67,8 +67,12 @@ export const updateProject = createAsyncThunk(
 // Fetch monthly weekly session durations
 export const fetchMonthlyWeeklyDurations = createAsyncThunk(
   'projects/fetchMonthlyWeeklyDurations',
-  async () => {
-    const res = await fetch('/api/sync/sessions/monthly-weekly-duration');
+  async (userId, thunkAPI) => {
+    let url = '/api/sync/sessions/monthly-weekly-duration';
+    if (userId) {
+      url += `?userId=${userId}`;
+    }
+    const res = await fetch(url);
     if (!res.ok) throw new Error('Failed to fetch durations');
     return await res.json();
   }
@@ -81,6 +85,15 @@ export const fetchProductivityReport = createAsyncThunk(
     const res = await fetch(`/api/sync/productivity-report?userId=${userId}&date=${date}`);
     if (!res.ok) throw new Error('Failed to fetch productivity report');
     return await res.json();
+  }
+);
+
+export const fetchAdminMonthlyWeeklySummary = createAsyncThunk(
+  'projects/fetchAdminMonthlyWeeklySummary',
+  async (adminId, thunkAPI) => {
+    const response = await fetch(`/api/sync/admin/monthly-weekly-summary?adminId=${adminId}`);
+    if (!response.ok) throw new Error('Failed to fetch admin monthly weekly summary');
+    return await response.json();
   }
 );
 
@@ -99,6 +112,9 @@ const projectsSlice = createSlice({
     productivityReport: null,
     productivityReportLoading: false,
     productivityReportError: null,
+    adminMonthlyWeeklySummary: [],
+    adminMonthlyWeeklySummaryLoading: false,
+    adminMonthlyWeeklySummaryError: null,
   },
   reducers: {},
   extraReducers: (builder) => {
@@ -177,6 +193,18 @@ const projectsSlice = createSlice({
       .addCase(fetchProductivityReport.rejected, (state, action) => {
         state.productivityReportLoading = false;
         state.productivityReportError = action.error.message;
+      })
+      .addCase(fetchAdminMonthlyWeeklySummary.pending, (state) => {
+        state.adminMonthlyWeeklySummaryLoading = true;
+        state.adminMonthlyWeeklySummaryError = null;
+      })
+      .addCase(fetchAdminMonthlyWeeklySummary.fulfilled, (state, action) => {
+        state.adminMonthlyWeeklySummaryLoading = false;
+        state.adminMonthlyWeeklySummary = action.payload;
+      })
+      .addCase(fetchAdminMonthlyWeeklySummary.rejected, (state, action) => {
+        state.adminMonthlyWeeklySummaryLoading = false;
+        state.adminMonthlyWeeklySummaryError = action.error.message;
       });
   },
 });
