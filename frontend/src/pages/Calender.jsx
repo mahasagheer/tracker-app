@@ -21,7 +21,6 @@ export default function Calendar() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [drawerDate, setDrawerDate] = useState(null);
   const [previewImg, setPreviewImg] = useState(null);
-
   // Handler for date click in EmployeeCalendar
   const handleDateClick = (date) => {
     setDrawerDate(date);
@@ -54,38 +53,11 @@ export default function Calendar() {
       setEvents([]);
       return;
     }
-    // Convert the month summary to EmployeeCalendar events format
-    // { date: 'YYYY-MM-DD', times: ['6:27', ...] }
-    const eventsArr = [];
-    const month = new Date().getMonth();
-    const year = new Date().getFullYear();
-    Object.entries(reporter.month).forEach(([weekLabel, daysObj], weekIdx) => {
-      Object.entries(daysObj).forEach(([day, value]) => {
-        if (day === 'Total') return;
-        // value is like '4h 25m'
-        const [h, m] = value.split('h').map(s => s.trim());
-        if (h === '0' && m.startsWith('0')) return; // skip 0 days
-        // Find the date for this week and day
-        // Week 1 starts from the first Monday of the month
-        let firstOfMonth = new Date(year, month, 1);
-        let firstMonday = new Date(firstOfMonth);
-        while (firstMonday.getDay() !== 1) {
-          firstMonday.setDate(firstMonday.getDate() + 1);
-        }
-        const weekOffset = parseInt(weekLabel.replace('Week ', '')) - 1;
-        const dayIdx = ['Monday','Tuesday','Wednesday','Thursday','Friday'].indexOf(day);
-        if (dayIdx === -1) return;
-        const date = new Date(firstMonday);
-        date.setDate(firstMonday.getDate() + weekOffset * 7 + dayIdx);
-        // Only include if in this month
-        if (date.getMonth() !== month) return;
-        // Format for EmployeeCalendar
-        eventsArr.push({
-          date: date.toISOString().slice(0,10),
-          times: [value.replace(' ',':').replace('m','').replace('h','')]
-        });
-      });
-    });
+    // Use new backend format: map each date in 'month' directly
+    const eventsArr = Object.entries(reporter.month).map(([date, value]) => ({
+      date,
+      times: [value.replace(' ',':').replace('m','').replace('h','')]
+    }));
     setEvents(eventsArr);
   }, [selectedReporter, reporters]);
 

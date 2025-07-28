@@ -158,7 +158,10 @@ function createTimerWindow() {
     timerWindow.setSize(windowWidth, windowHeight);
     timerWindow.show();
   });
-  timerWindow.on('closed', () => { timerWindow = null; });
+  timerWindow.on('closed', () => {
+    triggerImmediateSync(); // Sync before closing timer window
+    timerWindow = null;
+  });
 }
 
 function createInactivityWindow() {
@@ -206,6 +209,14 @@ function getRandomMinutes() {
   return Array.from(minutes).sort((a, b) => a - b);
 }
 
+// Helper to trigger immediate sync
+function triggerImmediateSync() {
+  const employee_id = getCurrentEmployeeId();
+  if (employee_id) {
+    syncAllTables(employee_id);
+  }
+}
+
 // Helper to create a new session in the database
 function startNewSession(employeeId) {
   const sessionId = uuidv4();
@@ -219,6 +230,7 @@ function startNewSession(employeeId) {
     last_modified: startTime,
     deleted_at: null,
   });
+  triggerImmediateSync(); // Sync after session is created
   return sessionId;
 }
 
@@ -241,6 +253,7 @@ function endCurrentSession() {
     total_duration_minutes: totalDuration,
     last_modified: endTime,
   });
+  triggerImmediateSync(); // Sync after session is ended
   currentSessionId = null;
 }
 
@@ -317,6 +330,7 @@ async function captureAndSaveScreenshot(hour, minute) {
     last_modified: capturedAt,
     deleted_at: null,
   });
+  triggerImmediateSync(); // Sync after screenshot and activity log are added
   console.log(`Screenshot saved: ${fileName}`);
   console.log(`Mouse EPM: ${mouseEPM}`);
   console.log(`Keyboard EPM: ${keyboardEPM}`);
@@ -396,11 +410,11 @@ function startAutoSync() {
   const employee_id = getCurrentEmployeeId();
   // Initial sync on app start
   syncAllTables(employee_id);
-  // Periodic sync every 2 minutes
-  if (syncInterval) clearInterval(syncInterval);
-  syncInterval = setInterval(() => {
-    syncAllTables(employee_id);
-  }, SYNC_INTERVAL_MS);
+  // Removed periodic sync
+  if (syncInterval) {
+    clearInterval(syncInterval);
+    syncInterval = null;
+  }
 }
 
 app.on('ready', () => {
@@ -429,6 +443,7 @@ ipcMain.on('timer-state', (event, newState) => {
   } else if (timerState === 'working' && newState !== 'working') {
     endCurrentSession();
     console.log('Ended session');
+    triggerImmediateSync(); // Sync when timer is paused
   }
   timerState = newState;
 });

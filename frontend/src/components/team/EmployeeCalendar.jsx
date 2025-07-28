@@ -37,7 +37,8 @@ export default function EmployeeCalendar({ title, events = [], initialMonth, onD
   // Build calendar grid
   const monthStart = startOfMonth(currentMonth);
   const monthEnd = endOfMonth(monthStart);
-  const startDate = startOfWeek(monthStart, { weekStartsOn: 0 });
+  // Find the first Sunday of the grid
+  let startDate = startOfWeek(monthStart, { weekStartsOn: 0 });
   const endDate = endOfWeek(monthEnd, { weekStartsOn: 0 });
 
   const rows = [];
